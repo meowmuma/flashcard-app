@@ -1,10 +1,11 @@
-// src/app/forgot-password/page.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ForgotPasswordPage(): JSX.Element {
+  const router = useRouter();
   const [email, setEmail] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
@@ -42,10 +43,12 @@ export default function ForgotPasswordPage(): JSX.Element {
         throw new Error(data.error || 'เกิดข้อผิดพลาด');
       }
 
-      setSuccess('รีเซ็ตรหัสผ่านสำเร็จ! กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่');
+      setSuccess('รีเซ็ตรหัสผ่านสำเร็จ! กำลังกลับสู่หน้า Login...');
       setEmail('');
       setNewPassword('');
       setConfirmPassword('');
+      
+      setTimeout(() => router.push('/login'), 2000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -54,94 +57,106 @@ export default function ForgotPasswordPage(): JSX.Element {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
-      <div className="content-card w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--primary-purple)' }}>
-            รีเซ็ตรหัสผ่าน
+    // พื้นหลังหลัก
+    <div className="min-h-screen flex w-full font-sans">
+      
+      {/* 👈 ส่วนแถบสีขาวด้านซ้าย (ความกว้าง 260px เท่ากับหน้า Login) */}
+      <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col shrink-0 h-screen hidden md:flex">
+        <div className="py-8 px-5">
+          <h1 className="text-[32px] font-medium text-[#6B21A8] tracking-wide text-center mb-10">
+            JAMMAN
           </h1>
-          <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>
-            กรอกอีเมลและรหัสผ่านใหม่
+        </div>
+      </aside>
+
+      {/* 👉 ส่วนเนื้อหาหลักตรงกลาง (พื้นหลังสีม่วงอ่อนแบบเดียวกับหน้า Login) */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 bg-[#EBE0FC]">
+        
+        {/* หัวข้อ Reset password */}
+        <div className="text-center mb-8">
+          <h1 className="text-6xl font-normal mb-3 text-gray-800 tracking-tight">
+            Reset password?
+          </h1>
+          <p className="text-[20px] text-gray-500 font-medium">
+            Please enter your details to reset your password
           </p>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6">
-            {error}
-          </div>
-        )}
+        {/* Card สีขาวของฟอร์ม */}
+        <div className="bg-white rounded-[40px] shadow-sm w-full max-w-[550px] p-12">
+          
+          {/* ส่วนแสดง Error / Success */}
+          {error && (
+            <div className="bg-red-50 text-red-500 p-4 rounded-[15px] mb-6 text-center text-[15px] border border-red-100 font-medium">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-50 text-green-600 p-4 rounded-[15px] mb-6 text-center text-[15px] border border-green-100 font-medium">
+              {success}
+            </div>
+          )}
 
-        {success && (
-          <div className="bg-green-50 border-2 border-green-200 text-green-700 px-4 py-3 rounded-xl mb-6">
-            {success}
-          </div>
-        )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Input อีเมล */}
+            <div>
+              <label className="block text-[16px] mb-2 text-gray-700 font-bold">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="Gmail"
+                className="w-full px-5 py-4 border-none bg-[#FAFAFD] shadow-[inset_0px_1px_3px_rgba(0,0,0,0.05)] rounded-[15px] focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all text-[15px] placeholder-gray-400"
+              />
+            </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              อีเมล
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="your@email.com"
-            />
-          </div>
+            {/* Input รหัสผ่านใหม่ */}
+            <div>
+              <label className="block text-[16px] mb-2 text-gray-700 font-bold">New Password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="Password"
+                className="w-full px-5 py-4 border-none bg-[#FAFAFD] shadow-[inset_0px_1px_3px_rgba(0,0,0,0.05)] rounded-[15px] focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all text-[15px] placeholder-gray-400"
+              />
+            </div>
 
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              รหัสผ่านใหม่
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="อย่างน้อย 6 ตัวอักษร"
-            />
-          </div>
+            {/* Input ยืนยันรหัสผ่านใหม่ */}
+            <div>
+              <label className="block text-[16px] mb-2 text-gray-700 font-bold">Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Password"
+                className="w-full px-5 py-4 border-none bg-[#FAFAFD] shadow-[inset_0px_1px_3px_rgba(0,0,0,0.05)] rounded-[15px] focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all text-[15px] placeholder-gray-400"
+              />
+            </div>
 
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              ยืนยันรหัสผ่านใหม่
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="กรอกรหัสผ่านอีกครั้ง"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full btn-primary py-4 text-lg disabled:opacity-50"
-          >
-            {isLoading ? 'กำลังรีเซ็ต...' : 'รีเซ็ตรหัสผ่าน'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/login"
-            className="text-sm hover:underline"
-            style={{ color: 'var(--primary-purple)' }}
-          >
-            ← กลับไปเข้าสู่ระบบ
-          </Link>
+            {/* ปุ่มกด Action */}
+            <div className="flex gap-4 pt-4">
+              <Link 
+                href="/login"
+                className="flex-1 py-4 text-center rounded-[15px] text-gray-600 border border-gray-200 font-bold hover:bg-gray-50 transition-all text-[16px]"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex-1 py-4 rounded-[15px] text-white font-bold shadow-md transition-all hover:bg-[#1A1A1A] disabled:opacity-50 text-[16px] bg-[#2D3136]"
+              >
+                {isLoading ? 'Processing...' : 'Reset Password'}
+              </button>
+            </div>
+          </form>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
