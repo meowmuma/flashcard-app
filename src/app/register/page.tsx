@@ -1,145 +1,277 @@
-// src/app/register/page.tsx
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, KeyboardEvent, FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Sidebar from '../components/Sidebar';
 
-export default function RegisterPage(): JSX.Element {
+interface DraftCard {
+  term: string;
+  definition: string;
+  id?: number; // เผื่อกรณีมีการ์ดเก่าที่มี ID
+}
+
+export default function CreateDeckPage(): JSX.Element {
   const router = useRouter();
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [confirmPassword, setConfirmPassword] = useState<string>('');
-  const [error, setError] = useState<string>('');
+  const searchParams = useSearchParams();
+  
+  const editDeckId: string | null = searchParams.get('edit');
+  const isEditMode: boolean = editDeckId !== null;
+
+  const [deckTitle, setDeckTitle] = useState<string>('');
+  const [cards, setCards] = useState<DraftCard[]>([
+    { term: '', definition: '' },
+    { term: '', definition: '' },
+  ]);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('รหัสผ่านไม่ตรงกัน');
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
       return;
     }
-
-    if (password.length < 6) {
-      setError('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
-      return;
+    // ถ้าเป็นโหมดแก้ไข ให้โหลดข้อมูลจาก Database ทันที
+    if (isEditMode && editDeckId) {
+      loadDeckFromDB(editDeckId, token);
     }
+  }, [isEditMode, editDeckId, router]);
 
+  // 🛠️ ฟังก์ชันดึงข้อมูลจาก Database (ปรับให้รองรับ API หลายรูปแบบ)
+  const loadDeckFromDB = async (id: string, token: string): Promise<void> => {
     setIsLoading(true);
-
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      // 1. ดึงชื่อชุดคำศัพท์ก่อน
+      const response = await fetch(`/api/decks/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
+      
+      if (!response.ok) throw new Error('ไม่สามารถโหลดข้อมูลชุดคำศัพท์ได้');
       const data = await response.json();
+      
+      // เซ็ตชื่อชุดคำศัพท์ (ตามที่คุณเห็นว่ามันโหลด 55 มาได้)
+      setDeckTitle(data.deck?.title || data.title || '');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'เกิดข้อผิดพลาด');
+      // 2. พยายามหา Cards จาก Response
+      let fetchedCards = data.cards || data.deck?.cards || [];
+
+      // 3. ⭐️ ถ้า API แรกไม่ได้ส่งการ์ดมาด้วย ให้ลองไปดึงจากตาราง cards ตรงๆ
+      if (fetchedCards.length === 0) {
+        try {
+          // ลองยิงไปหา API ที่มักจะใช้แยกตารางกัน เช่น /api/cards?deckId=...
+          const cardsRes = await fetch(`/api/cards?deckId=${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (cardsRes.ok) {
+            const cardsData = await cardsRes.json();
+            fetchedCards = cardsData.cards || cardsData || [];
+          }
+        } catch (e) {
+          console.log("No separate cards API found");
+        }
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('userId', data.user.id.toString());
+      // 4. เอาข้อมูลที่ได้มาใส่ในช่องกรอก
+      if (fetchedCards && fetchedCards.length > 0) {
+        const formattedCards = fetchedCards.map((card: any) => ({
+          term: card.term || card.word || '',
+          definition: card.definition || card.meaning || '',
+          id: card.id,
+        }));
+        setCards(formattedCards);
+      } else {
+        // ถ้าหาไม่เจอจริงๆ ในระบบ (อาจจะเพิ่งสร้างชุดเปล่าๆ) ให้แสดง 2 ช่องว่าง
+        setCards([{ term: '', definition: '' }, { term: '', definition: '' }]);
+      }
 
-      router.push('/');
     } catch (err: any) {
-      setError(err.message);
+      console.error(err);
+      setError('ดึงข้อมูลจากฐานข้อมูลล้มเหลว หรือไม่พบชุดคำศัพท์นี้');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleCardChange = (index: number, field: keyof DraftCard, value: string): void => {
+    const newCards = [...cards];
+    newCards[index] = { ...newCards[index], [field]: value };
+    setCards(newCards);
+  };
+
+  const handleAddCard = (): void => {
+    setCards([...cards, { term: '', definition: '' }]);
+  };
+
+  const handleRemoveCard = (index: number): void => {
+    if (cards.length <= 2) {
+      alert('ต้องมีอย่างน้อย 2 การ์ด');
+      return;
+    }
+    setCards(cards.filter((_, i) => i !== index));
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>, index: number): void => {
+    if (e.key === 'Enter' && index === cards.length - 1) {
+      if (cards[index].term && cards[index].definition) {
+        e.preventDefault();
+        handleAddCard();
+      }
+    }
+  };
+
+  const handleSave = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    if (!deckTitle.trim() || cards.filter(c => c.term && c.definition).length === 0) {
+      setError('กรุณากรอกชื่อชุดและข้อมูลการ์ดอย่างน้อย 1 ใบ');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const filledCards = cards.filter(c => c.term.trim() && c.definition.trim());
+      const url = isEditMode ? `/api/decks/${editDeckId}` : '/api/decks';
+      
+      const response = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: deckTitle.trim(),
+          cards: filledCards,
+        }),
+      });
+
+      if (!response.ok) throw new Error('ไม่สามารถบันทึกได้');
+      
+      alert(isEditMode ? 'แก้ไขสำเร็จ!' : 'สร้างสำเร็จ!');
+      router.push('/my-library');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
-      <div className="content-card w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--primary-purple)' }}>
-            JAMMAN
-          </h1>
-          <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>
-            สมัครสมาชิกเพื่อเริ่มต้น
-          </p>
+    <div className="flex min-h-screen bg-white font-sans text-gray-800">
+      <Sidebar />
+      <main className="flex-1 p-10 overflow-y-auto">
+        <div className="max-w-4xl mx-auto flex flex-col gap-8">
+          
+          <div className="flex items-center gap-4">
+            <span className="text-[32px]">📝</span>
+            <div className="flex flex-col">
+              <h1 className="text-[32px] font-normal text-[#1A202C] tracking-wide">
+                {isEditMode ? 'แก้ไขชุดคำศัพท์' : 'สร้างชุดคำศัพท์ใหม่'}
+              </h1>
+              <p className="text-gray-500 text-sm mt-1">
+                {isEditMode ? 'แก้ไขข้อมูลชุดคำศัพท์ของคุณ' : 'สร้างชุดคำศัพท์ของคุณเองเพื่อเริ่มการเรียนรู้'}
+              </p>
+            </div>
+          </div>
+
+          {isLoading && isEditMode ? (
+            <div className="text-center py-20 text-purple-600 font-bold">
+              กำลังดึงข้อมูลคำศัพท์เดิมของคุณ... ⏳
+            </div>
+          ) : (
+            <form onSubmit={handleSave} className="space-y-8 mt-2">
+              
+              {error && (
+                <div className="bg-red-50 text-red-500 p-4 rounded-[15px] text-sm font-medium border border-red-100">
+                  {error}
+                </div>
+              )}
+
+              <div className="bg-[#FAFAFD] p-8 rounded-[25px] border border-gray-100 shadow-[0px_1px_3px_rgba(0,0,0,0.05)]">
+                <label className="block text-[15px] font-bold mb-3 text-gray-700">ชื่อชุดคำศัพท์ <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={deckTitle}
+                  onChange={(e) => setDeckTitle(e.target.value)}
+                  placeholder="เช่น คำศัพท์ภาษาอังกฤษพื้นฐาน"
+                  className="w-full px-5 py-4 rounded-[15px] border-none bg-white shadow-sm focus:ring-2 focus:ring-purple-200 outline-none transition-all text-[15px]"
+                />
+              </div>
+
+              <div className="flex justify-between items-center px-2">
+                <h2 className="text-[20px] font-bold text-gray-700">รายการคำศัพท์</h2>
+                <button 
+                  type="button" 
+                  onClick={handleAddCard} 
+                  className="px-6 py-2.5 bg-[#EBE0FC] text-[#4C1D95] rounded-[15px] font-bold text-sm shadow-[0px_2px_4px_rgba(0,0,0,0.08)] hover:bg-[#D5BCF2] transition-all"
+                >
+                  + เพิ่มการ์ดใหม่
+                </button>
+              </div>
+
+              <div className="space-y-5">
+                {cards.map((card, index) => (
+                  <div key={index} className="bg-[#FAFAFD] p-6 rounded-[20px] border border-gray-100 shadow-[0px_1px_3px_rgba(0,0,0,0.05)] relative group">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="font-bold text-gray-400 text-sm">การ์ดที่ {index + 1}</span>
+                      {cards.length > 2 && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveCard(index)} 
+                          className="text-red-400 hover:text-red-600 font-bold text-sm"
+                        >
+                          ลบ
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-500">คำศัพท์</label>
+                        <input
+                          type="text"
+                          value={card.term}
+                          onChange={(e) => handleCardChange(index, 'term', e.target.value)}
+                          onKeyPress={(e) => handleKeyPress(e, index)}
+                          className="w-full px-4 py-3 rounded-[12px] border-none bg-white shadow-sm focus:ring-2 focus:ring-purple-200 outline-none transition-all text-[14px]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-500">ความหมาย</label>
+                        <input
+                          type="text"
+                          value={card.definition}
+                          onChange={(e) => handleCardChange(index, 'definition', e.target.value)}
+                          onKeyPress={(e) => handleKeyPress(e, index)}
+                          className="w-full px-4 py-3 rounded-[12px] border-none bg-white shadow-sm focus:ring-2 focus:ring-purple-200 outline-none transition-all text-[14px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4 pt-4 pb-10">
+                <button 
+                  type="button" 
+                  onClick={() => router.push('/my-library')} 
+                  className="flex-1 py-4 rounded-[15px] border border-gray-200 font-bold text-gray-500 hover:bg-gray-50 transition-all text-[15px]"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving} 
+                  className="flex-1 py-4 bg-[#6B21A8] text-white rounded-[15px] font-bold shadow-md hover:bg-[#581C87] transition-all disabled:opacity-50 text-[15px]"
+                >
+                  {isSaving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'สร้างชุดคำศัพท์'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-
-        {error && (
-          <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              อีเมล
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="your@email.com"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              รหัสผ่าน
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="อย่างน้อย 6 ตัวอักษร"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              ยืนยันรหัสผ่าน
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-all"
-              style={{ borderColor: 'var(--border-color)' }}
-              placeholder="กรอกรหัสผ่านอีกครั้ง"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full btn-primary py-4 text-lg disabled:opacity-50"
-          >
-            {isLoading ? 'กำลังสมัครสมาชิก...' : 'สมัครสมาชิก'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p style={{ color: 'var(--text-secondary)' }}>
-            มีบัญชีอยู่แล้ว?{' '}
-            <Link
-              href="/login"
-              className="font-semibold hover:underline"
-              style={{ color: 'var(--primary-purple)' }}
-            >
-              เข้าสู่ระบบ
-            </Link>
-          </p>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
