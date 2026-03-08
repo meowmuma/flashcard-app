@@ -4,322 +4,246 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from './components/Sidebar';
-import { Deck, DecksResponse, SortOption } from './types';
+import Link from 'next/link';
 
-export default function HomePage(): JSX.Element {
+interface DeckInfo {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  is_public: boolean;
+  share_code?: string | null;
+  times_copied: number;
+  card_count: number;
+  author_email: string;
+  is_owner?: boolean;
+}
+
+export default function HomePage() {
   const router = useRouter();
-  
-  // State สำหรับเก็บชุดคำศัพท์ทั้งหมด
-  // เรากำหนดให้เป็น Deck[] ซึ่งหมายความว่าเป็น array ของ Deck objects
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  
-  // SortOption เป็น type ที่เรากำหนดไว้ใน types/index.ts
-  // มันจะจำกัดค่าที่เป็นไปได้เป็นเพียง 'updated', 'title', หรือ 'cards' เท่านั้น
-  const [sortBy, setSortBy] = useState<SortOption>('updated');
+  const [decks, setDecks] = useState<DeckInfo[]>([]);
+  const [filteredDecks, setFilteredDecks] = useState<DeckInfo[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // useEffect จะทำงานเมื่อ component ถูก mount ครั้งแรก
-  // เราใช้มันเพื่อตรวจสอบการล็อกอินและโหลดข้อมูล
+  const languages = [
+    'ทั้งหมด',
+    'ภาษาอังกฤษ',
+    'ภาษาญี่ปุ่น',
+    'ภาษาจีน',
+    'ภาษาเกาหลี',
+    'ภาษาฝรั่งเศส',
+    'ภาษาไทย',
+    'ภาษาสเปน',
+    'ภาษาเยอรมัน',
+  ];
+
   useEffect(() => {
-    const token: string | null = localStorage.getItem('token');
+    fetchPublicDecks();
+  }, [sortBy]);
+
+  useEffect(() => {
+    filterDecks();
+  }, [decks, searchQuery, selectedLanguage]);
+
+  const fetchPublicDecks = async () => {
+    setIsLoading(true);
+
+    const token = localStorage.getItem('token');
     if (!token) {
       router.push('/login');
       return;
     }
-    fetchDecks();
-  }, [router]);
 
-  // ฟังก์ชันนี้จะดึงข้อมูลชุดคำศัพท์ทั้งหมดจาก API
-  // เรากำหนด return type เป็น Promise<void> เพราะเป็น async function ที่ไม่คืนค่า
-  const fetchDecks = async (): Promise<void> => {
     try {
-      const token: string | null = localStorage.getItem('token');
-      const response: Response = await fetch('/api/decks', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const params = new URLSearchParams();
+      params.append('sort', sortBy);
+
+      const response = await fetch(`/api/public-decks?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      // แปลง response เป็น JSON ก่อน (ใช้ any เพราะ error response อาจมีโครงสร้างต่างกัน)
-      const json: any = await response.json();
+      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(json?.error || 'ไม่สามารถโหลดข้อมูลได้');
+      if (response.ok) {
+        setDecks(data.decks);
       }
-
-      // ยืนยันว่า json เป็น DecksResponse เมื่อ response.ok
-      const data: DecksResponse = json as DecksResponse;
-      setDecks(data.decks);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (error) {
+      console.error('Error fetching decks:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ฟังก์ชันลบชุดคำศัพท์
-  // parameter ทุกตัวมี type ที่ชัดเจน deckId เป็น number และ deckTitle เป็น string
-  const handleDeleteDeck = async (deckId: number, deckTitle: string): Promise<void> => {
-    // confirm() จะคืนค่า boolean เมื่อผู้ใช้ตอบ
-    const confirmed: boolean = confirm(
-      `คุณต้องการลบชุด "${deckTitle}" ใช่หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้`
-    );
+  const filterDecks = () => {
+    let filtered = [...decks];
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (deck) =>
+          deck.title.toLowerCase().includes(query) ||
+          (deck.description && deck.description.toLowerCase().includes(query))
+      );
+    }
+
+    if (selectedLanguage && selectedLanguage !== 'ทั้งหมด') {
+      filtered = filtered.filter((deck) => deck.category === selectedLanguage);
+    }
+
+    setFilteredDecks(filtered);
+  };
+
+  const handleShare = (shareCode: string, title: string) => {
+    const shareUrl = `${window.location.origin}/share/${shareCode}`;
     
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const token: string | null = localStorage.getItem('token');
-      const response: Response = await fetch(`/api/decks/${deckId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const data: any = await response.json();
-        throw new Error(data.error || 'ไม่สามารถลบชุดคำศัพท์ได้');
-      }
-
-      // filter() จะคืน array ใหม่ที่ไม่รวมชุดที่ถูกลบ
-      // TypeScript รู้ว่า decks เป็น Deck[] ดังนั้น deck แต่ละตัวก็เป็น Deck
-      setDecks(decks.filter((deck: Deck) => deck.id !== deckId));
-      
-    } catch (err: any) {
-      alert(err.message);
-    }
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      alert(`คัดลอกลิงก์แชร์สำเร็จ!\n\nชุด: ${title}\n\nลิงก์: ${shareUrl}\n\nส่งลิงก์นี้ให้เพื่อนเพื่อเชิญชวนเข้ามาเรียนรู้`);
+    }).catch(() => {
+      prompt('คัดลอกลิงก์นี้:', shareUrl);
+    });
   };
-
-  // ฟังก์ชันไปหน้าแก้ไข
-  // เราโหลดข้อมูลชุดมาก่อน แล้วเก็บไว้ใน localStorage เพื่อให้หน้าแก้ไขใช้งาน
-  const handleEditDeck = async (deckId: number): Promise<void> => {
-    try {
-      const token: string | null = localStorage.getItem('token');
-      const response: Response = await fetch(`/api/decks/${deckId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data: any = await response.json();
-      if (response.ok) {
-        // แปลง object เป็น JSON string เพื่อเก็บใน localStorage
-        localStorage.setItem('editingDeck', JSON.stringify(data));
-        router.push(`/create-deck?edit=${deckId}`);
-      }
-    } catch (err: any) {
-      alert('ไม่สามารถโหลดข้อมูลสำหรับแก้ไขได้');
-    }
-  };
-
-  // ฟังก์ชันกรองและเรียงลำดับชุดคำศัพท์
-  // return type คือ Deck[] เพราะเราคืน array ของ Deck objects
-  const getFilteredAndSortedDecks = (): Deck[] => {
-    // กรองตามคำค้นหา
-    // toLowerCase() ทำให้การค้นหาไม่สนใจตัวพิมพ์เล็กใหญ่
-    let filtered: Deck[] = decks.filter((deck: Deck) =>
-      deck.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // เรียงลำดับตามเกณฑ์ที่เลือก
-    switch (sortBy) {
-      case 'title':
-        // เรียงตามชื่อ A-Z โดยใช้ localeCompare สำหรับภาษาไทย
-        filtered.sort((a: Deck, b: Deck) => 
-          a.title.localeCompare(b.title, 'th')
-        );
-        break;
-      case 'cards':
-        // เรียงตามจำนวนการ์ด มากไปน้อย
-        // เราใช้ || 0 เพื่อจัดการกับกรณีที่ card_count เป็น undefined
-        filtered.sort((a: Deck, b: Deck) => 
-          (b.card_count || 0) - (a.card_count || 0)
-        );
-        break;
-      case 'updated':
-      default:
-        // เรียงตามวันที่อัปเดต ล่าสุดก่อน
-        filtered.sort((a: Deck, b: Deck) => 
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        );
-        break;
-    }
-
-    return filtered;
-  };
-
-  const filteredDecks: Deck[] = getFilteredAndSortedDecks();
 
   return (
-    <div className="app-container">
+    <div className="min-h-screen bg-white flex">
       <Sidebar />
       
-      <main className="main-content">
-        <div className="fade-in-up">
-          {/* ส่วนหัวพร้อมปุ่มสร้างชุดใหม่ */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                🏠 หน้าแรก
-              </h1>
-              <p style={{ color: 'var(--text-secondary)' }}>
-                ยินดีต้อนรับกลับมา! เลือกชุดคำศัพท์เพื่อเริ่มเรียนรู้
+      <div className="flex-1 ml-64">
+        <div className="max-w-7xl mx-auto p-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-[#7A3689] mb-2">
+              Explore Flash Cards
+            </h1>
+            <p className="text-[#7A3689] text-opacity-70">
+              ค้นพบชุดการ์ดจากผู้ใช้ทั่วโลก เริ่มเรียนรู้ได้ทันที
+            </p>
+          </div>
+
+          <div className="bg-[#F0E4FF] rounded-3xl p-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search flash cards..."
+                  className="w-full px-4 py-3 bg-white border-none rounded-2xl text-[#7A3689] placeholder-[#7A3689] placeholder-opacity-40 focus:ring-2 focus:ring-[#7A3689] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border-none rounded-2xl text-[#7A3689] focus:ring-2 focus:ring-[#7A3689] focus:outline-none"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang} value={lang === 'ทั้งหมด' ? '' : lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border-none rounded-2xl text-[#7A3689] focus:ring-2 focus:ring-[#7A3689] focus:outline-none"
+                >
+                  <option value="newest">ล่าสุด</option>
+                  <option value="popular">ได้รับความนิยม</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="text-center py-20">
+              <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-[#E3DAFF] border-t-[#7A3689]"></div>
+              <p className="mt-4 text-[#7A3689]">กำลังโหลด...</p>
+            </div>
+          ) : filteredDecks.length === 0 ? (
+            <div className="text-center py-20 bg-[#F0E4FF] rounded-3xl">
+              <div className="text-6xl mb-4">📭</div>
+              <p className="text-[#7A3689] text-lg">
+                {searchQuery || selectedLanguage
+                  ? 'ไม่พบชุดการ์ดที่ตรงกับเงื่อนไข'
+                  : 'ยังไม่มีชุดการ์ดสาธารณะ'}
               </p>
             </div>
-
-            <button
-              onClick={(): void => {
-                localStorage.removeItem('editingDeck');
-                router.push('/create-deck');
-              }}
-              className="btn-primary flex items-center gap-2 text-lg"
-            >
-              <span className="text-2xl">+</span>
-              <span>Create</span>
-            </button>
-          </div>
-
-          {/* ส่วนค้นหาและเรียงลำดับ */}
-          <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <input
-                type="text"
-                placeholder="🔍 ค้นหาชุดคำศัพท์..."
-                value={searchTerm}
-                onChange={(e): void => setSearchTerm(e.target.value)}
-                className="w-full px-6 py-4 rounded-xl border-2 focus:outline-none transition-all text-lg"
-                style={{
-                  borderColor: searchTerm ? 'var(--primary-purple)' : 'var(--border-color)',
-                  background: 'white'
-                }}
-              />
-            </div>
-            
-            <div>
-              <select
-                value={sortBy}
-                onChange={(e): void => setSortBy(e.target.value as SortOption)}
-                className="w-full px-6 py-4 rounded-xl border-2 focus:outline-none transition-all text-lg cursor-pointer"
-                style={{
-                  borderColor: 'var(--border-color)',
-                  background: 'white'
-                }}
-              >
-                <option value="updated">เรียงตามวันที่อัปเดต</option>
-                <option value="title">เรียงตามชื่อ A-Z</option>
-                <option value="cards">เรียงตามจำนวนคำ</option>
-              </select>
-            </div>
-          </div>
-
-          {/* แสดงสถานะการโหลด */}
-          {isLoading && (
-            <div className="text-center py-16">
-              <div className="loading-spinner mx-auto mb-4"></div>
-              <p style={{ color: 'var(--text-secondary)' }}>กำลังโหลดชุดคำศัพท์ของคุณ...</p>
-            </div>
-          )}
-
-          {/* แสดง error ถ้ามี */}
-          {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-4 rounded-xl mb-6">
-              <strong>เกิดข้อผิดพลาด:</strong> {error}
-            </div>
-          )}
-
-          {/* แสดงรายการชุดคำศัพท์ */}
-          {!isLoading && !error && (
+          ) : (
             <>
-              {filteredDecks.length === 0 ? (
-                <div className="text-center py-16 content-card">
-                  <div className="text-6xl mb-4">
-                    {searchTerm ? '🔍' : '📚'}
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                    {searchTerm ? 'ไม่พบผลการค้นหา' : 'ยังไม่มีชุดคำศัพท์'}
-                  </h2>
-                  <p className="mb-6 text-lg" style={{ color: 'var(--text-secondary)' }}>
-                    {searchTerm 
-                      ? `ไม่พบชุดคำศัพท์ที่มีคำว่า "${searchTerm}"` 
-                      : 'เริ่มต้นสร้างชุดคำศัพท์แรกของคุณเพื่อเริ่มการเรียนรู้'}
-                  </p>
-                  {!searchTerm && (
-                    <button
-                      onClick={(): void => router.push('/create-deck')}
-                      className="btn-primary text-lg"
-                    >
-                      + สร้างชุดคำศัพท์แรก
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="mb-6">
-                    <p className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                      {searchTerm 
-                        ? `พบ ${filteredDecks.length} ชุดจากการค้นหา "${searchTerm}"`
-                        : `ทั้งหมด ${filteredDecks.length} ชุดคำศัพท์`}
-                    </p>
-                  </div>
+              <p className="text-[#7A3689] text-opacity-70 mb-6">
+                พบ {filteredDecks.length} ชุดการ์ด
+              </p>
 
-                  {/* Grid แสดงการ์ดแต่ละชุด */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDecks.map((deck: Deck) => (
-                      <div key={deck.id} className="deck-card">
-                        <div className="mb-4">
-                          <h3 className="deck-card-title">{deck.title}</h3>
-                          <p className="deck-card-meta">
-                            ผู้สร้าง: {(localStorage.getItem('userEmail') || '').split('@')[0]}
-                          </p>
-                          <p className="deck-card-meta">
-                            อัปเดต: {new Date(deck.updated_at).toLocaleDateString('th-TH', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </p>
-                          <span className="deck-card-count">
-                            {deck.card_count || 0} คำ
-                          </span>
-                        </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredDecks.map((deck) => (
+                  <div
+                    key={deck.id}
+                    className="bg-[#F0E4FF] rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      {deck.category && (
+                        <span className="px-3 py-1 bg-white rounded-full text-xs font-medium text-[#7A3689]">
+                          {deck.category}
+                        </span>
+                      )}
+                      {deck.is_owner && (
+                        <span className="px-3 py-1 bg-[#7A3689] text-white rounded-full text-xs font-medium">
+                          ของฉัน
+                        </span>
+                      )}
+                    </div>
 
-                        <div className="flex gap-3">
-                          <button
-                            onClick={(): void => router.push(`/study/${deck.id}`)}
-                            className="flex-1 btn-success"
-                          >
-                            เริ่ม
-                          </button>
-                          <button
-                            onClick={(): void => { handleEditDeck(deck.id); }}
-                            className="px-4 py-2 rounded-lg border-2 hover:bg-yellow-50 transition-all"
-                            style={{ borderColor: 'var(--border-color)' }}
-                            title="แก้ไข"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={(): void => { handleDeleteDeck(deck.id, deck.title); }}
-                            className="px-4 py-2 rounded-lg border-2 hover:bg-red-50 transition-all"
-                            style={{ borderColor: '#FEB2B2', color: '#E53E3E' }}
-                            title="ลบ"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    <h3 className="text-xl font-bold text-[#7A3689] mb-2 line-clamp-2">
+                      {deck.title}
+                    </h3>
+
+                    {deck.description && (
+                      <p className="text-[#7A3689] text-opacity-70 text-sm mb-4 line-clamp-2">
+                        {deck.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center text-sm text-[#7A3689] text-opacity-60 mb-4 space-x-4">
+                      <span>📝 {deck.card_count} cards</span>
+                      <span>👤 {deck.author_email.split('@')[0]}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Link
+                        href={`/study/${deck.id}`}
+                        className="px-4 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-all font-medium text-center text-sm"
+                      >
+                        📖 Study
+                      </Link>
+                      <Link
+                        href={`/game/${deck.id}`}
+                        className="px-4 py-3 bg-[#7A3689] text-white rounded-full hover:bg-opacity-90 transition-all font-medium text-center text-sm"
+                      >
+                        🎯 Match
+                      </Link>
+                    </div>
+
+                    {deck.share_code && (
+                      <button
+                        onClick={() => handleShare(deck.share_code!, deck.title)}
+                        className="w-full mt-3 px-4 py-3 bg-white text-[#7A3689] rounded-full hover:bg-[#E3DAFF] transition-all font-medium text-sm"
+                      >
+                        🔗 Share
+                      </button>
+                    )}
                   </div>
-                </>
-              )}
+                ))}
+              </div>
             </>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

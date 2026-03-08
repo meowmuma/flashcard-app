@@ -1,155 +1,254 @@
-// src/app/api/decks/route.ts
+// src/app/api/decks/route.ts - เพิ่ม GET method
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import pool from '../../lib/db';
-import { Deck, Card, DecksResponse } from '../../types';
+import jwt from 'jsonwebtoken';
 
-// Interface สำหรับ JWT payload
-interface JWTPayload {
-  userId: number;
-  email: string;
-  iat: number;
-  exp: number;
+function generateShareCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
-// Interface สำหรับ request body ของการสร้าง/แก้ไข deck
-interface CreateDeckRequestBody {
-  title: string;
-  cards: Omit<Card, 'id' | 'deck_id' | 'created_at'>[]; // cards ที่ไม่มี id deck_id และ created_at
-}
+// ฟังก์ชันตรวจสอบ token และดึง userId
+async function getUserIdFromToken(request: NextRequest): Promise<number | null> {
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '');
 
-// ฟังก์ชันช่วยในการดึง userId จาก token
-// เราแยกออกมาเป็นฟังก์ชันเพราะจะใช้ซ้ำในหลาย API
-function getUserIdFromToken(request: NextRequest): number | null {
-  const authHeader = request.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     return null;
   }
 
-  const token = authHeader.substring(7);
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET is not defined');
+  }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as JWTPayload;
-    
+    const decoded: any = jwt.verify(token, jwtSecret);
     return decoded.userId;
-  } catch (error) {
+  } catch (err) {
     return null;
   }
 }
 
-// GET - ดึงชุดคำศัพท์ทั้งหมดของผู้ใช้
-export async function GET(request: NextRequest) {
+// GET - ดึงชุดการ์ดทั้งหมดของผู้ใช้
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  console.log('📚 GET Decks: Fetching user decks...');
+
+  let client;
+
   try {
-    const userId = getUserIdFromToken(request);
+    const userId = await getUserIdFromToken(request);
 
     if (!userId) {
+      console.log('❌ GET Decks: Unauthorized');
       return NextResponse.json(
-        { error: 'กรุณาเข้าสู่ระบบ' },
+        { success: false, error: 'ไม่พบ token การยืนยันตัวตน' },
         { status: 401 }
       );
     }
 
-    // ดึงข้อมูลชุดคำศัพท์พร้อมนับจำนวนการ์ด
-    // เราใช้ LEFT JOIN เพื่อให้ได้ชุดที่ไม่มีการ์ดด้วย
-    const result = await pool.query<Deck>(
+    console.log('🔌 GET Decks: Connecting to database...');
+    client = await pool.connect();
+
+    // ดึงชุดการ์ดพร้อมนับจำนวนการ์ด
+    const result = await client.query(
       `SELECT 
-        d.id, 
-        d.user_id, 
-        d.title, 
-        d.created_at, 
-        d.updated_at,
-        COUNT(c.id)::int as card_count
-       FROM decks d
-       LEFT JOIN cards c ON d.id = c.deck_id
-       WHERE d.user_id = $1
-       GROUP BY d.id
-       ORDER BY d.updated_at DESC`,
+        d.*,
+        COUNT(c.id) as card_count
+      FROM decks d
+      LEFT JOIN cards c ON d.id = c.deck_id
+      WHERE d.user_id = $1
+      GROUP BY d.id
+      ORDER BY d.updated_at DESC`,
       [userId]
     );
 
-    const response: DecksResponse = {
+    console.log(`✅ GET Decks: Found ${result.rows.length} decks`);
+
+    return NextResponse.json({
+      success: true,
       decks: result.rows,
-    };
+    });
 
-    return NextResponse.json(response, { status: 200 });
+  } catch (error: any) {
+    console.error('❌ GET Decks error:', error);
 
-  } catch (error) {
-    console.error('Get decks error:', error);
     return NextResponse.json(
-      { error: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      {
+        success: false,
+        error: 'ไม่สามารถดึงข้อมูลชุดการ์ดได้',
+        details: error.message,
+      },
       { status: 500 }
     );
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 }
 
-// POST - สร้างชุดคำศัพท์ใหม่
-export async function POST(request: NextRequest) {
-  const client = await pool.connect();
-  
+// POST - สร้างชุดการ์ดใหม่
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  console.log('📝 POST Deck: Creating new deck...');
+
+  let client;
+
   try {
-    const userId = getUserIdFromToken(request);
+    const userId = await getUserIdFromToken(request);
 
     if (!userId) {
+      console.log('❌ POST Deck: Unauthorized');
       return NextResponse.json(
-        { error: 'กรุณาเข้าสู่ระบบ' },
+        { success: false, error: 'ไม่พบ token การยืนยันตัวตน' },
         { status: 401 }
       );
     }
 
-    const body: CreateDeckRequestBody = await request.json();
-    const { title, cards } = body;
+    const body = await request.json();
+    console.log('📦 POST Deck: Received data:', {
+      title: body.title,
+      userId: userId,
+      isPublic: body.is_public,
+    });
 
-    // Validation
-    if (!title || !cards || cards.length === 0) {
+    const { title, description, category, is_public } = body;
+
+    // ตรวจสอบข้อมูล
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      console.log('❌ POST Deck: Invalid title');
       return NextResponse.json(
-        { error: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
+        { success: false, error: 'กรุณาใส่ชื่อชุดการ์ด' },
         { status: 400 }
       );
     }
 
-    // เริ่ม transaction เพื่อให้มั่นใจว่าข้อมูลจะถูกบันทึกพร้อมกันหรือไม่บันทึกเลย
-    await client.query('BEGIN');
+    if (is_public) {
+      if (!description || description.trim().length === 0) {
+        console.log('❌ POST Deck: Public deck requires description');
+        return NextResponse.json(
+          { success: false, error: 'กรุณาใส่คำอธิบายสำหรับชุดการ์ดสาธารณะ' },
+          { status: 400 }
+        );
+      }
+      if (!category || category.trim().length === 0) {
+        console.log('❌ POST Deck: Public deck requires category');
+        return NextResponse.json(
+          { success: false, error: 'กรุณาเลือกภาษาสำหรับชุดการ์ดสาธารณะ' },
+          { status: 400 }
+        );
+      }
+    }
 
-    // สร้างชุดคำศัพท์
-    const deckResult = await client.query<Deck>(
-      'INSERT INTO decks (user_id, title) VALUES ($1, $2) RETURNING *',
-      [userId, title]
+    const shareCode = is_public ? generateShareCode() : null;
+
+    console.log('🔌 POST Deck: Connecting to database...');
+    client = await pool.connect();
+
+    // ตรวจสอบว่า user มีอยู่จริง
+    console.log('🔍 POST Deck: Verifying user exists...');
+    const userCheck = await client.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
     );
 
-    const newDeck: Deck = deckResult.rows[0];
-
-    // สร้างการ์ดทั้งหมด
-    for (const card of cards) {
-      await client.query(
-        'INSERT INTO cards (deck_id, term, definition) VALUES ($1, $2, $3)',
-        [newDeck.id, card.term, card.definition]
+    if (userCheck.rows.length === 0) {
+      console.log('❌ POST Deck: User not found in database');
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'ไม่พบข้อมูลผู้ใช้ กรุณาลงทะเบียนใหม่',
+          details: `User ID ${userId} does not exist in users table`
+        },
+        { status: 400 }
       );
     }
 
-    // Commit transaction
-    await client.query('COMMIT');
+    console.log('✅ POST Deck: User verified');
 
-    return NextResponse.json(
-      { 
-        message: 'สร้างชุดคำศัพท์สำเร็จ',
-        deck: newDeck 
-      },
-      { status: 201 }
+    // สร้างชุดการ์ด
+    console.log('💾 POST Deck: Inserting deck...');
+    const result = await client.query(
+      `INSERT INTO decks (user_id, title, description, category, is_public, share_code) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING *`,
+      [userId, title.trim(), description?.trim() || null, category?.trim() || null, is_public || false, shareCode]
     );
 
-  } catch (error) {
-    // ถ้ามีข้อผิดพลาด rollback transaction
-    await client.query('ROLLBACK');
-    console.error('Create deck error:', error);
+    const deck = result.rows[0];
+    console.log(`✅ POST Deck: Created successfully with ID: ${deck.id}`);
+
+    // ตรวจสอบว่ามีการส่งการ์ดมาด้วยหรือไม่
+    const cards = body.cards || [];
+
+    if (Array.isArray(cards) && cards.length > 0) {
+      console.log(`📝 POST Deck: Inserting ${cards.length} cards...`);
+
+      // วนลูปบันทึกการ์ดทีละใบ
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+
+        // ตรวจสอบว่าการ์ดมีข้อมูลครบถ้วน
+        if (card.term && card.definition && 
+            card.term.trim().length > 0 && 
+            card.definition.trim().length > 0) {
+          
+          await client.query(
+            `INSERT INTO cards (deck_id, term, definition, position) 
+             VALUES ($1, $2, $3, $4)`,
+            [deck.id, card.term.trim(), card.definition.trim(), i]
+          );
+
+          console.log(`  ✅ Card ${i + 1}: "${card.term}" inserted`);
+        } else {
+          console.log(`  ⚠️ Card ${i + 1}: Skipped (incomplete data)`);
+        }
+      }
+
+      console.log(`✅ POST Deck: All cards inserted successfully`);
+    }
+
+    // ดึงข้อมูล deck พร้อมจำนวนการ์ดที่เพิ่งสร้าง
+    const deckWithCards = await client.query(
+      `SELECT 
+        d.*,
+        COUNT(c.id) as card_count
+      FROM decks d
+      LEFT JOIN cards c ON d.id = c.deck_id
+      WHERE d.id = $1
+      GROUP BY d.id`,
+      [deck.id]
+    );
+
+    return NextResponse.json({
+      success: true,
+      deck: deckWithCards.rows[0],
+      message: 'สร้างชุดการ์ดสำเร็จ',
+    });
+
+  } catch (error: any) {
+    console.error('❌ POST Deck error:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint,
+    });
+
     return NextResponse.json(
-      { error: 'เกิดข้อผิดพลาดในการสร้างชุดคำศัพท์' },
+      {
+        success: false,
+        error: 'ไม่สามารถสร้างชุดการ์ดได้',
+        details: error.detail || error.message,
+      },
       { status: 500 }
     );
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+      console.log('🔌 POST Deck: Database connection released');
+    }
   }
 }
