@@ -4,336 +4,352 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../components/Sidebar';
-import { DeckProgress, StudySession, ProgressResponse } from '../types';
 
-export default function MyProgressPage(): JSX.Element {
+interface ProgressData {
+  id: number;
+  deck_id: number;
+  deck_title: string;
+  session_type: 'study' | 'match';
+  total_cards: number;
+  known_cards: number;
+  unknown_cards: number;
+  current_card_index?: number;
+  accuracy_percentage?: number;
+  time_spent_seconds?: number;
+  completed_at?: string;
+  updated_at?: string;
+  best_time_seconds?: number;
+  attempts_count?: number;
+  data_type: 'progress' | 'history';
+}
+
+export default function MyProgressPage() {
   const router = useRouter();
-  
-  // State สำหรับเก็บข้อมูลความคืบหน้าของแต่ละชุด
-  // DeckProgress เป็น interface ที่มีข้อมูลว่าแต่ละชุดมีการ์ดกี่ใบ รู้กี่ใบ ไม่รู้กี่ใบ
-  const [deckProgress, setDeckProgress] = useState<DeckProgress[]>([]);
-  
-  // State สำหรับเก็บประวัติการเรียนล่าสุด
-  // StudySession จะบอกเราว่าเรียนชุดไหน เมื่อไหร่ และผลเป็นอย่างไร
-  const [recentSessions, setRecentSessions] = useState<StudySession[]>([]);
-  
-  // State สำหรับสถิติรวมทั้งหมด
-  const [totalStats, setTotalStats] = useState<{
-    totalCards: number;
-    knownCards: number;
-    unknownCards: number;
-  }>({
-    totalCards: 0,
-    knownCards: 0,
-    unknownCards: 0,
-  });
-  
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
+  const [allData, setAllData] = useState<ProgressData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'flashcards' | 'match'>('flashcards');
 
-  useEffect(() => {
-    const token: string | null = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    fetchProgress();
-  }, [router]);
+  useEffect(() => { fetchAllProgress(); }, []);
 
-  // ฟังก์ชันดึงข้อมูลความคืบหน้าทั้งหมดจาก API
-  // API จะส่งกลับมาทั้งความคืบหน้าของแต่ละชุดและประวัติการเรียน
-  const fetchProgress = async (): Promise<void> => {
+  const fetchAllProgress = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) { router.push('/login'); return; }
     try {
-      const token: string | null = localStorage.getItem('token');
-      const response: Response = await fetch('/api/progress', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const res = await fetch('/api/all-progress', { headers: { Authorization: `Bearer ${token}` } });
+      const result = await res.json();
+      if (res.ok) setAllData(result.data || []);
+    } catch { /* silent */ }
+    finally { setIsLoading(false); }
+  };
+
+  // ✅ FIX: match → /game/[id] ไม่ใช่ /match/[id]
+  const goToGame = (deckId: number, sessionType: 'study' | 'match') => {
+    router.push(sessionType === 'match' ? `/game/${deckId}` : `/study/${deckId}`);
+  };
+
+  const handleRestart = async (deckId: number, sessionType: 'study' | 'match') => {
+    const name = sessionType === 'match' ? 'เกม Match' : 'การเรียน Flashcard';
+    if (!confirm(`ต้องการเริ่ม${name}ใหม่หรือไม่?\nความคืบหน้าเดิมจะถูกลบ`)) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      await fetch(`/api/study-progress?deck_id=${deckId}&session_type=${sessionType}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      // แปลง response เป็น JSON ก่อน (ใช้ any เพราะ error response อาจมีโครงสร้างต่างกัน)
-      const json: any = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json?.error || 'ไม่สามารถโหลดข้อมูลได้');
-      }
-
-      // ยืนยันว่า json เป็น ProgressResponse เมื่อ response.ok
-      const data: ProgressResponse = json as ProgressResponse;
-
-      // เก็บข้อมูลที่ได้ลง state ต่างๆ
-      setDeckProgress(data.deckProgress);
-      setRecentSessions(data.recentSessions || []);
-      
-      // เก็บสถิติรวม ถ้าไม่มีให้ใช้ค่า 0
-      setTotalStats({
-        totalCards: data.totalCards || 0,
-        knownCards: data.knownCards || 0,
-        unknownCards: data.unknownCards || 0,
-      });
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+      goToGame(deckId, sessionType);
+    } catch { alert('เกิดข้อผิดพลาด'); }
   };
 
-  // ฟังก์ชันคำนวณเปอร์เซ็นต์ความสำเร็จของแต่ละชุด
-  // เราคำนวณจากจำนวนคำที่รู้เทียบกับคำทั้งหมด
-  const calculateProgress = (deck: DeckProgress): number => {
-    if (deck.total_cards === 0) return 0;
-    return Math.round((deck.known_cards / deck.total_cards) * 100);
+  // แปลง seconds (decimal เช่น 9.6) → "9.6 วินาที" หรือ "1:05.2"
+  const fmtSec = (val?: number) => {
+    if (val == null) return '--';
+    const sec = parseFloat(String(val));
+    const min = Math.floor(sec / 60);
+    const s   = sec % 60;
+    if (min > 0) return `${min}:${Math.floor(s).toString().padStart(2,'0')}.${Math.floor((s%1)*10)}`;
+    return `${sec.toFixed(1)} วินาที`;
   };
 
-  // ฟังก์ชันกำหนดสีของ progress bar ตามเปอร์เซ็นต์
-  // เปอร์เซ็นต์สูงจะได้สีเขียว เปอร์เซ็นต์ต่ำจะได้สีแดง
-  const getProgressColor = (percentage: number): string => {
-    if (percentage >= 80) return '#48BB78'; // เขียว - เก่งมาก
-    if (percentage >= 50) return '#4299E1'; // น้ำเงิน - ปานกลาง
-    if (percentage >= 20) return '#ED8936'; // ส้ม - ต้องทบทวน
-    return '#F56565'; // แดง - เริ่มต้นเรียน
+  // แปลง UTC timestamp → relative time
+  const fmtDate = (dateStr?: string) => {
+    if (!dateStr) return 'ไม่ทราบ';
+    const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+    const diff = Date.now() - d.getTime();
+    if (diff < 0) return 'เมื่อสักครู่';
+    const mins = Math.floor(diff / 60000);
+    const hrs  = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1)  return 'เมื่อสักครู่';
+    if (mins < 60) return `${mins} นาทีที่แล้ว`;
+    if (hrs  < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+    if (days < 7)  return `${days} วันที่แล้ว`;
+    return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  // คำนวณเปอร์เซ็นต์รวมทั้งหมด
-  const overallProgress: number = totalStats.totalCards > 0
-    ? Math.round((totalStats.knownCards / totalStats.totalCards) * 100)
-    : 0;
+  const flashInProgress = allData.filter(d => d.data_type === 'progress' && d.session_type === 'study');
+  const flashCompleted  = allData.filter(d => d.data_type === 'history'  && d.session_type === 'study');
+  const matchInProgress = allData.filter(d => d.data_type === 'progress' && d.session_type === 'match');
+  const matchCompleted  = allData.filter(d => d.data_type === 'history'  && d.session_type === 'match');
 
-  return (
-    <div className="app-container">
-      <Sidebar />
-      
-      <main className="main-content">
-        <div className="fade-in-up">
-          {/* ส่วนหัว */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-              📊 My Progress
-            </h1>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              ติดตามความคืบหน้าการเรียนรู้ของคุณ
-            </p>
+  // ── Section Header ──
+  const SectionHeader = ({ emoji, label, count }: { emoji: string; label: string; count: number }) => (
+    <div className="flex items-center gap-3 mb-5">
+      <span className="text-2xl">{emoji}</span>
+      <h2 className="text-xl font-bold text-[#7A3689]">{label} ({count})</h2>
+    </div>
+  );
+
+  // ── Flashcard กำลังเรียน ──
+  const FlashProgressCard = ({ item }: { item: ProgressData }) => {
+    const done = item.current_card_index || 0;
+    const pct  = item.total_cards > 0 ? Math.round((done / item.total_cards) * 100) : 0;
+    return (
+      <div className="bg-white border-2 border-[#E3DAFF] rounded-2xl p-6 hover:shadow-md transition-all">
+        <h3 className="text-lg font-bold text-[#7A3689] mb-2">{item.deck_title}</h3>
+        <div className="flex flex-wrap gap-3 text-sm text-[#7A3689]/70 mb-4">
+          <span>📋 {item.total_cards} การ์ด</span>
+          <span>✅ รู้ {item.known_cards} คำ</span>
+          <span>❌ ยังไม่รู้ {item.unknown_cards} คำ</span>
+          <span>🕐 {fmtDate(item.updated_at)}</span>
+        </div>
+        <div className="mb-4">
+          <div className="flex justify-between text-sm font-medium text-[#7A3689] mb-1">
+            <span>ความคืบหน้า: {done}/{item.total_cards}</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-[#F0E4FF] rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] rounded-full transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={() => goToGame(item.deck_id, 'study')}
+            className="flex-1 py-3 bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] text-white rounded-xl font-medium hover:shadow-lg transition-all">
+            ▶️ ทำต่อ
+          </button>
+          <button onClick={() => handleRestart(item.deck_id, 'study')}
+            className="px-5 py-3 bg-[#F0E4FF] text-[#7A3689] rounded-xl font-medium hover:bg-[#E3DAFF] transition-all">
+            🔄 เริ่มใหม่
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Flashcard เสร็จสิ้น ──
+  const FlashCompletedCard = ({ item }: { item: ProgressData }) => {
+    const acc = item.accuracy_percentage || 0;
+    const color = acc >= 80 ? 'text-green-600' : acc >= 60 ? 'text-orange-500' : 'text-red-500';
+    const bar   = acc >= 80 ? 'from-green-400 to-green-500' : acc >= 60 ? 'from-orange-400 to-orange-500' : 'from-red-400 to-red-500';
+    return (
+      <div className="bg-white border-2 border-green-100 rounded-2xl p-6 hover:shadow-md transition-all">
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-lg font-bold text-[#7A3689]">{item.deck_title}</h3>
+          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">✓ เสร็จสิ้น</span>
+        </div>
+        <div className="flex flex-wrap gap-3 text-sm text-[#7A3689]/70 mb-3">
+          <span>📋 {item.total_cards} การ์ด</span>
+          <span>✅ รู้ {item.known_cards} คำ</span>
+          <span>❌ ไม่รู้ {item.unknown_cards} คำ</span>
+          <span className={`font-semibold ${color}`}>🎯 {acc}%</span>
+          {item.time_spent_seconds && <span>⏱️ {fmtSec(item.time_spent_seconds)}</span>}
+        </div>
+        <p className="text-xs text-[#7A3689]/40 mb-4">🕐 เสร็จเมื่อ {fmtDate(item.completed_at)}</p>
+        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-4">
+          <div className={`h-full bg-gradient-to-r ${bar} rounded-full transition-all`} style={{ width: `${acc}%` }} />
+        </div>
+        <button onClick={() => goToGame(item.deck_id, 'study')}
+          className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium hover:shadow-lg transition-all">
+          📖 ทบทวนอีกครั้ง
+        </button>
+      </div>
+    );
+  };
+
+  // ── Match กำลังจับคู่ ──
+  const MatchProgressCard = ({ item }: { item: ProgressData }) => {
+    const done = item.current_card_index || 0;
+    const pct  = item.total_cards > 0 ? Math.round((done / item.total_cards) * 100) : 0;
+    return (
+      <div className="bg-white border-2 border-[#E3DAFF] rounded-2xl p-6 hover:shadow-md transition-all">
+        <h3 className="text-lg font-bold text-[#7A3689] mb-2">{item.deck_title}</h3>
+        <div className="flex flex-wrap gap-3 text-sm text-[#7A3689]/70 mb-4">
+          <span>🎯 จับคู่แล้ว {done}/{item.total_cards} คู่</span>
+          <span>🕐 {fmtDate(item.updated_at)}</span>
+        </div>
+        <div className="mb-4">
+          <div className="flex justify-between text-sm font-medium text-[#7A3689] mb-1">
+            <span>ความคืบหน้า: {done}/{item.total_cards}</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-[#F0E4FF] rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] rounded-full transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={() => goToGame(item.deck_id, 'match')}
+            className="flex-1 py-3 bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] text-white rounded-xl font-medium hover:shadow-lg transition-all">
+            ▶️ เล่นต่อ
+          </button>
+          <button onClick={() => handleRestart(item.deck_id, 'match')}
+            className="px-5 py-3 bg-[#F0E4FF] text-[#7A3689] rounded-xl font-medium hover:bg-[#E3DAFF] transition-all">
+            🔄 เริ่มใหม่
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Match เสร็จสิ้น — สถิติดีสุด + เวลาล่าสุด ──
+  const MatchCompletedCard = ({ item }: { item: ProgressData }) => {
+    const isBest = item.best_time_seconds != null
+      && item.time_spent_seconds != null
+      && item.time_spent_seconds <= item.best_time_seconds;
+    return (
+      <div className="bg-white border-2 border-[#E3DAFF] rounded-2xl p-6 hover:shadow-md transition-all">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h3 className="text-lg font-bold text-[#7A3689]">{item.deck_title}</h3>
+              <span className="px-2 py-0.5 bg-[#F0E4FF] text-[#7A3689] rounded-full text-xs font-medium">✓ เสร็จสิ้น</span>
+            </div>
+            {/* ✅ แสดงจำนวนคำ */}
+            <p className="text-sm text-[#7A3689]/70 mb-1">🎯 {item.total_cards} คู่</p>
+            <p className="text-xs text-[#7A3689]/40">🕐 เล่นเมื่อ {fmtDate(item.completed_at)}</p>
           </div>
 
-          {isLoading && (
-            <div className="text-center py-16">
-              <div className="loading-spinner mx-auto mb-4"></div>
-              <p style={{ color: 'var(--text-secondary)' }}>กำลังโหลดข้อมูล...</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-4 rounded-xl mb-6">
-              {error}
-            </div>
-          )}
-
-          {!isLoading && !error && (
-            <>
-              {/* ส่วนแสดงสถิติรวม */}
-              <div className="content-card mb-8">
-                <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
-                  📈 ภาพรวมการเรียนรู้
-                </h2>
-                
-                {/* Progress bar แสดงความคืบหน้ารวม */}
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      ความคืบหน้าโดยรวม
-                    </span>
-                    <span className="text-2xl font-bold" style={{ color: getProgressColor(overallProgress) }}>
-                      {overallProgress}%
-                    </span>
-                  </div>
-                  <div 
-                    className="w-full h-6 rounded-full overflow-hidden"
-                    style={{ backgroundColor: 'var(--border-color)' }}
-                  >
-                    <div
-                      className="h-full transition-all duration-500 ease-out rounded-full"
-                      style={{
-                        width: `${overallProgress}%`,
-                        backgroundColor: getProgressColor(overallProgress),
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* แสดงสถิติแบบตัวเลข */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center p-6 rounded-xl" style={{ background: 'var(--background)' }}>
-                    <div className="text-4xl mb-2">📚</div>
-                    <div className="text-3xl font-bold mb-2" style={{ color: 'var(--primary-purple)' }}>
-                      {totalStats.totalCards}
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)' }}>คำศัพท์ทั้งหมด</div>
-                  </div>
-
-                  <div className="text-center p-6 rounded-xl" style={{ background: 'var(--background)' }}>
-                    <div className="text-4xl mb-2">✅</div>
-                    <div className="text-3xl font-bold mb-2" style={{ color: '#48BB78' }}>
-                      {totalStats.knownCards}
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)' }}>คำที่จำได้</div>
-                  </div>
-
-                  <div className="text-center p-6 rounded-xl" style={{ background: 'var(--background)' }}>
-                    <div className="text-4xl mb-2">❓</div>
-                    <div className="text-3xl font-bold mb-2" style={{ color: '#F56565' }}>
-                      {totalStats.unknownCards}
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)' }}>คำที่ยังไม่จำ</div>
-                  </div>
-                </div>
+          {/* ✅ สถิติดีสุด + เวลาล่าสุด */}
+          <div className="flex gap-5 ml-4 text-right shrink-0">
+            {item.best_time_seconds != null && (
+              <div>
+                <p className="text-xs text-[#7A3689]/50 mb-0.5">🏆 สถิติดีสุด</p>
+                <p className="text-2xl font-bold text-[#7A3689]">{fmtSec(item.best_time_seconds)}</p>
               </div>
-
-              {/* ส่วนแสดงความคืบหน้าแต่ละชุด */}
-              <div className="content-card mb-8">
-                <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
-                  📖 ความคืบหน้าแต่ละชุด
-                </h2>
-
-                {deckProgress.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📭</div>
-                    <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>
-                      ยังไม่มีข้อมูลการเรียน เริ่มเรียนชุดแรกของคุณเลย!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {deckProgress.map((deck: DeckProgress) => {
-                      const progress: number = calculateProgress(deck);
-                      return (
-                        <div 
-                          key={deck.deck_id} 
-                          className="p-6 rounded-xl border-2 hover:shadow-lg transition-all cursor-pointer"
-                          style={{ borderColor: 'var(--border-color)' }}
-                          onClick={(): void => router.push(`/study/${deck.deck_id}`)}
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex-1">
-                              <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                                {deck.title}
-                              </h3>
-                              {deck.last_studied && (
-                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                  เรียนล่าสุด: {new Date(deck.last_studied).toLocaleDateString('th-TH', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="text-3xl font-bold mb-1" style={{ color: getProgressColor(progress) }}>
-                                {progress}%
-                              </div>
-                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                {deck.known_cards}/{deck.total_cards} คำ
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Progress bar ของแต่ละชุด */}
-                          <div 
-                            className="w-full h-4 rounded-full overflow-hidden mb-4"
-                            style={{ backgroundColor: 'var(--border-color)' }}
-                          >
-                            <div
-                              className="h-full transition-all duration-500"
-                              style={{
-                                width: `${progress}%`,
-                                backgroundColor: getProgressColor(progress),
-                              }}
-                            />
-                          </div>
-
-                          {/* แสดงรายละเอียดจำนวนคำ */}
-                          <div className="flex gap-4 text-sm">
-                            <span style={{ color: '#48BB78' }}>
-                              ✅ รู้แล้ว: {deck.known_cards}
-                            </span>
-                            <span style={{ color: '#F56565' }}>
-                              ❓ ยังไม่รู้: {deck.unknown_cards}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+            )}
+            {item.time_spent_seconds != null && (
+              <div>
+                <p className="text-xs text-[#7A3689]/50 mb-0.5">⏱️ เวลาล่าสุด</p>
+                <p className={`text-2xl font-bold ${isBest ? 'text-green-600' : 'text-[#9D5CB5]'}`}>
+                  {fmtSec(item.time_spent_seconds)}
+                </p>
+                {isBest && <p className="text-xs text-green-500">🎉 สถิติใหม่!</p>}
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* ส่วนแสดงประวัติการเรียนล่าสุด */}
-              {recentSessions.length > 0 && (
-                <div className="content-card">
-                  <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
-                    🕒 ประวัติการเรียนล่าสุด
-                  </h2>
-                  
-                  <div className="space-y-4">
-                    {recentSessions.map((session: StudySession) => {
-                      const totalAnswered: number = session.known_count + session.unknown_count;
-                      const successRate: number = totalAnswered > 0
-                        ? Math.round((session.known_count / totalAnswered) * 100)
-                        : 0;
+        <button onClick={() => goToGame(item.deck_id, 'match')}
+          className="w-full py-3 bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] text-white rounded-xl font-medium hover:shadow-lg transition-all">
+          🎮 เล่นอีกครั้ง
+        </button>
+      </div>
+    );
+  };
 
-                      return (
-                        <div 
-                          key={session.id}
-                          className="p-5 rounded-xl border-2 hover:bg-gray-50 transition-all"
-                          style={{ borderColor: 'var(--border-color)' }}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <h4 className="font-bold text-lg mb-1" style={{ color: 'var(--text-primary)' }}>
-                                {session.deck_title}
-                              </h4>
-                              <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
-                                {new Date(session.completed_at).toLocaleDateString('th-TH', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </p>
-                              <div className="flex gap-4 text-sm">
-                                <span style={{ color: '#48BB78' }}>
-                                  ✅ {session.known_count} คำ
-                                </span>
-                                <span style={{ color: '#F56565' }}>
-                                  ❌ {session.unknown_count} คำ
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div 
-                                className="text-3xl font-bold"
-                                style={{ color: getProgressColor(successRate) }}
-                              >
-                                {successRate}%
-                              </div>
-                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                อัตราความสำเร็จ
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex">
+        <Sidebar />
+        <div className="flex-1 ml-64 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-14 w-14 border-4 border-[#E3DAFF] border-t-[#7A3689]" />
+            <p className="mt-4 text-[#7A3689] font-medium">กำลังโหลด...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white flex">
+      <Sidebar />
+      <div className="flex-1 ml-64 p-8">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-[#7A3689] mb-8">My Progress</h1>
+
+          {/* Summary */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'ทั้งหมด',   value: allData.length,                                   bg: 'bg-blue-50   border-blue-200',   text: 'text-blue-700'   },
+              { label: 'Flashcards', value: flashInProgress.length + flashCompleted.length,   bg: 'bg-purple-50 border-purple-200', text: 'text-[#7A3689]'  },
+              { label: 'Match',      value: matchInProgress.length + matchCompleted.length,   bg: 'bg-pink-50   border-pink-200',   text: 'text-pink-700'   },
+              { label: 'เสร็จสิ้น', value: flashCompleted.length + matchCompleted.length,    bg: 'bg-green-50  border-green-200',  text: 'text-green-700'  },
+            ].map(s => (
+              <div key={s.label} className={`${s.bg} border-2 rounded-2xl p-5 text-center`}>
+                <p className={`text-sm font-medium mb-1 ${s.text}`}>{s.label}</p>
+                <p className={`text-3xl font-bold ${s.text}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-3 mb-8">
+            {(['flashcards', 'match'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-4 rounded-2xl font-bold text-base transition-all ${
+                  activeTab === tab
+                    ? 'bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] text-white shadow-lg scale-[1.01]'
+                    : 'bg-[#F0E4FF] text-[#7A3689] hover:bg-[#E3DAFF]'
+                }`}>
+                {tab === 'flashcards'
+                  ? `📚 Flashcards (${flashInProgress.length + flashCompleted.length})`
+                  : `🎮 Match Game (${matchInProgress.length + matchCompleted.length})`}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Flashcards Tab ── */}
+          {activeTab === 'flashcards' && (
+            <div className="space-y-10">
+              {flashInProgress.length > 0 && (
+                <section>
+                  <SectionHeader emoji="⏳" label="กำลังเรียน" count={flashInProgress.length} />
+                  <div className="space-y-4">{flashInProgress.map(i => <FlashProgressCard key={i.id} item={i} />)}</div>
+                </section>
+              )}
+              {flashCompleted.length > 0 && (
+                <section>
+                  <SectionHeader emoji="✅" label="เสร็จสิ้นแล้ว" count={flashCompleted.length} />
+                  <div className="space-y-4">{flashCompleted.map(i => <FlashCompletedCard key={i.id} item={i} />)}</div>
+                </section>
+              )}
+              {flashInProgress.length === 0 && flashCompleted.length === 0 && (
+                <div className="text-center py-20 bg-[#F0E4FF] rounded-3xl">
+                  <div className="text-6xl mb-3">📚</div>
+                  <p className="text-lg font-bold text-[#7A3689]">ยังไม่มีประวัติ Flashcards</p>
+                  <p className="text-[#7A3689]/60 mt-1">เริ่มเรียนชุดการ์ดเพื่อบันทึกความคืบหน้า</p>
                 </div>
               )}
-            </>
+            </div>
+          )}
+
+          {/* ── Match Tab ── */}
+          {activeTab === 'match' && (
+            <div className="space-y-10">
+              {/* ✅ ส่วน "กำลังจับคู่" */}
+              {matchInProgress.length > 0 && (
+                <section>
+                  <SectionHeader emoji="⏳" label="กำลังจับคู่" count={matchInProgress.length} />
+                  <div className="space-y-4">{matchInProgress.map(i => <MatchProgressCard key={i.id} item={i} />)}</div>
+                </section>
+              )}
+              {matchCompleted.length > 0 && (
+                <section>
+                  <SectionHeader emoji="✅" label="เสร็จสิ้นแล้ว" count={matchCompleted.length} />
+                  <div className="space-y-4">{matchCompleted.map(i => <MatchCompletedCard key={i.id} item={i} />)}</div>
+                </section>
+              )}
+              {matchInProgress.length === 0 && matchCompleted.length === 0 && (
+                <div className="text-center py-20 bg-[#F0E4FF] rounded-3xl">
+                  <div className="text-6xl mb-3">🎮</div>
+                  <p className="text-lg font-bold text-[#7A3689]">ยังไม่มีประวัติ Match Game</p>
+                  <p className="text-[#7A3689]/60 mt-1">เล่นเกมเพื่อบันทึกสถิติ</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
