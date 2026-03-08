@@ -1,4 +1,3 @@
-// src/app/login/page.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -30,10 +29,18 @@ export default function LoginPage(): JSX.Element {
         throw new Error(data.error || 'เกิดข้อผิดพลาด');
       }
 
+      // ✅ เก็บ token
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('userId', data.user.id.toString());
 
+      // ✅ เก็บ user ทั้ง object
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      // ✅ เก็บแยกไว้ใช้สะดวก
+      localStorage.setItem('userId', data.user.id.toString());
+      localStorage.setItem('userName', data.user.username);
+      localStorage.setItem('userEmail', data.user.email);
+
+    alert(`ยินดีต้อนรับ ${data.user.username} 👋`);
       router.push('/');
     } catch (err: any) {
       setError(err.message);
