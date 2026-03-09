@@ -40,8 +40,8 @@ export interface MatchingCard {
   pairId: number;
   x: number;
   y: number;
-  isMatched: boolean;
-  isSelected: boolean;
+  matched: boolean;
+  selected: boolean;
 }
 
 export interface PublicDeckInfo {
