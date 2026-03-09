@@ -1,0 +1,9 @@
+{
+  "/page": "app/page.js",
+  "/api/public-decks/route": "app/api/public-decks/route.js",
+  "/my-library/page": "app/my-library/page.js",
+  "/flashcards/page": "app/flashcards/page.js",
+  "/my-progress/page": "app/my-progress/page.js",
+  "/api/decks/route": "app/api/decks/route.js",
+  "/api/all-progress/route": "app/api/all-progress/route.js"
+}
