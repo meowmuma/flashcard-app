@@ -38,6 +38,8 @@ export interface MatchingCard {
   content: string;
   type: 'term' | 'definition';
   pairId: number;
+  x: number;
+  y: number;
   isMatched: boolean;
   isSelected: boolean;
 }
