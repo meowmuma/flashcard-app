@@ -290,7 +290,7 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         <div className="flex-1 ml-64 flex items-center justify-center">
           <div className="text-center animate-pulse">
             <div className="inline-block rounded-full h-16 w-16 border-4 border-[#F0E4FF] border-t-[#B388EB] animate-spin mb-4"></div>
-            <p className="text-[#B388EB] font-bold text-lg tracking-wide">Preparing cards... 💖</p>
+            <p className="text-[#B388EB] font-bold text-lg tracking-wide">Preparing cards.... 💖</p>
           </div>
         </div>
       </div>
