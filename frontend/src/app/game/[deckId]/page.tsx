@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Deck, Card, MatchingCard } from '@/types';
+import { Deck, Card, MatchingCard } from '@/app/types';
 
 export default function MatchingGamePage() {
   const router = useRouter();

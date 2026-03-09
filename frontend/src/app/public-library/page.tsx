@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../components/Sidebar';
-import { PublicDeckInfo } from '@/types';
+import { PublicDeckInfo } from '@/app/types';
 
 export default function PublicLibraryPage() {
   const router = useRouter();
