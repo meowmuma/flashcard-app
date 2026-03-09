@@ -6,7 +6,7 @@ compatibility_date = "2024-09-23"
 [[d1_databases]]
 binding      = "DB"
 database_name = "jamman-db"
-database_id   = "YOUR_D1_DATABASE_ID"   # ได้จาก: wrangler d1 create jamman-db
+database_id   = "ed09104e-aadc-48d6-b172-c00ced803bfd"   # ได้จาก: wrangler d1 create jamman-db
 
 [vars]
 ALLOWED_ORIGIN = "https://jamman.vercel.app"   # เปลี่ยนเป็น URL จริงของ Vercel
