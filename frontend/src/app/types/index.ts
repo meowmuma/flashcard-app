@@ -34,7 +34,7 @@ export interface Card {
 }
 
 export interface MatchingCard {
-  id: number;
+  id: string;
   content: string;
   type: 'term' | 'definition';
   pairId: number;
