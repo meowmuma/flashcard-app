@@ -27,7 +27,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  // ✅ FIX: ใช้ ref เพื่อให้ finishSession อ่านค่าล่าสุดได้เสมอ (หลีกเลี่ยงปัญหา stale closure)
   const knownCountRef = useRef(0);
   const learningCountRef = useRef(0);
   const [knownCount, setKnownCount] = useState(0);
@@ -36,13 +35,11 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // ✅ FIX: ใช้ ref เก็บ cards และ currentIndex เพื่อให้ saveProgress อ่านค่าล่าสุดได้
   const cardsRef = useRef<Card[]>([]);
   const currentIndexRef = useRef(0);
 
   const [startTime] = useState(Date.now());
 
-  // sync ref กับ state เสมอ
   useEffect(() => {
     knownCountRef.current = knownCount;
   }, [knownCount]);
@@ -84,12 +81,12 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         cardsRef.current = shuffled;
         await tryLoadProgress(shuffled);
       } else {
-        alert(data.error || 'ไม่สามารถโหลดชุดการ์ดได้');
+        alert(data.error || 'Failed to load deck');
         router.push('/');
       }
     } catch (error) {
       console.error('Error fetching deck:', error);
-      alert('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      alert('An error occurred while loading data');
       router.push('/');
     } finally {
       setIsLoading(false);
@@ -118,14 +115,13 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         if (hasRealProgress) {
           const orderedCards = progress.card_order
             ? JSON.parse(progress.card_order)
-                .map((cardId: number) => loadedCards.find((c) => c.id === cardId))
-                .filter(Boolean)
+            .map((cardId: number) => loadedCards.find((c) => c.id === cardId))
+            .filter(Boolean)
             : loadedCards;
 
           setCards(orderedCards as Card[]);
           cardsRef.current = orderedCards as Card[];
 
-          // ✅ FIX: โหลด index ที่บันทึกไว้ตรงๆ (เราบันทึก nextIndex แล้ว)
           setCurrentIndex(progress.current_card_index);
           currentIndexRef.current = progress.current_card_index;
 
@@ -156,7 +152,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
     }
   };
 
-  // ✅ FIX: รับ nextIndex เป็น param เพื่อบันทึกตำแหน่งที่ถูกต้อง
   const saveProgress = async (nextIndex: number, known: number, learning: number) => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -171,7 +166,7 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         body: JSON.stringify({
           deck_id: deckId,
           session_type: 'study',
-          current_card_index: nextIndex,          // ✅ บันทึก index ถัดไปที่จะเรียน
+          current_card_index: nextIndex,
           total_cards: cardsRef.current.length,
           known_cards: known,
           unknown_cards: learning,
@@ -184,7 +179,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
     }
   };
 
-  // ✅ FIX: รับค่า finalKnown/finalLearning โดยตรง ไม่อ่านจาก state (หลีกเลี่ยง stale closure)
   const saveCompletedSession = async (finalKnown: number, finalLearning: number) => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -211,13 +205,11 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
           time_spent_seconds: timeSpent,
         }),
       });
-      console.log(`✅ Session completed: ${finalKnown}/${totalCards} known`);
     } catch (error) {
       console.error('Error saving completed session:', error);
     }
   };
 
-  // ✅ FIX: คำนวณค่าใหม่ก่อน แล้วส่งค่าใหม่ไปทุกฟังก์ชัน (ไม่พึ่ง state update)
   const handleStillLearning = () => {
     if (isAnimating) return;
     setIsAnimating(true);
@@ -240,7 +232,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
     moveToNext(newKnown, learningCountRef.current);
   };
 
-  // ✅ FIX: รับ known/learning ปัจจุบันมาเลย ไม่อ่านจาก state
   const moveToNext = (known: number, learning: number) => {
     setIsFlipped(false);
 
@@ -253,23 +244,19 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         setCurrentIndex(nextIndex);
         currentIndexRef.current = nextIndex;
 
-        // ✅ FIX: บันทึก nextIndex (ตำแหน่งถัดไป) ไม่ใช่ currentIndex
         saveProgress(nextIndex, known, learning);
         setIsAnimating(false);
       } else {
-        // การ์ดหมดแล้ว → จบ session
         finishSession(known, learning);
       }
-    }, 300);
+    }, 400); 
   };
 
-  // ✅ FIX: รับค่าตรงๆ ไม่อ่านจาก state เพื่อป้องกัน stale closure
   const finishSession = async (finalKnown: number, finalLearning: number) => {
-    // ✅ FIX: บันทึกครั้งเดียวตอนจบ ไม่บันทึกซ้ำ
     await saveCompletedSession(finalKnown, finalLearning);
 
     const searchParams = new URLSearchParams({
-      title: deck?.title || 'ไม่ทราบชื่อชุด',
+      title: deck?.title || 'Unknown Deck',
       total: cardsRef.current.length.toString(),
       known: finalKnown.toString(),
       unknown: finalLearning.toString(),
@@ -289,10 +276,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
       if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
         handleFlip();
-      } else if (e.key === '1' && isFlipped) {
-        handleStillLearning();
-      } else if (e.key === '2' && isFlipped) {
-        handleKnow();
       }
     };
 
@@ -302,12 +285,12 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex">
+      <div className="min-h-screen bg-[#FAFAFA] flex">
         <Sidebar />
         <div className="flex-1 ml-64 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-[#E3DAFF] border-t-[#7A3689]"></div>
-            <p className="mt-4 text-[#7A3689] font-medium">กำลังโหลด...</p>
+          <div className="text-center animate-pulse">
+            <div className="inline-block rounded-full h-16 w-16 border-4 border-[#F0E4FF] border-t-[#B388EB] animate-spin mb-4"></div>
+            <p className="text-[#B388EB] font-bold text-lg tracking-wide">Preparing cards.... 💖</p>
           </div>
         </div>
       </div>
@@ -316,17 +299,18 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
 
   if (!deck || cards.length === 0) {
     return (
-      <div className="min-h-screen bg-white flex">
+      <div className="min-h-screen bg-[#FAFAFA] flex">
         <Sidebar />
         <div className="flex-1 ml-64 flex items-center justify-center">
-          <div className="text-center bg-[#F0E4FF] rounded-3xl p-12 shadow-lg">
-            <div className="text-6xl mb-6">📭</div>
-            <p className="text-[#7A3689] text-xl font-medium">ชุดนี้ยังไม่มีการ์ด</p>
+          <div className="text-center bg-white rounded-[2rem] p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-[#F0E4FF]">
+            <div className="text-7xl mb-6">📭</div>
+            <p className="text-[#7A3689] text-2xl font-bold mb-2">Oops! No cards in this deck.</p>
+            <p className="text-gray-400 mb-8">Let's go back and add some in your library.</p>
             <button
               onClick={() => router.push('/my-library')}
-              className="mt-6 px-8 py-3 bg-[#7A3689] text-white rounded-full hover:bg-opacity-90 transition-all"
+              className="px-8 py-3 bg-gradient-to-r from-[#B388EB] to-[#9D5CB5] text-white rounded-full font-bold hover:shadow-lg hover:-translate-y-1 transition-all"
             >
-              กลับไปห้องสมุด
+              Back to Library 📚
             </button>
           </div>
         </div>
@@ -337,123 +321,137 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
   const currentCard = cards[currentIndex];
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-[#FAFAFA] flex">
       <Sidebar />
 
-      <div className="flex-1 ml-64 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-bold text-[#7A3689]">Flashcards</h1>
-                <p className="text-[#7A3689] text-opacity-70 mt-1">{deck.title}</p>
-              </div>
-              <div className="text-2xl font-bold text-[#7A3689]">
-                {currentIndex + 1} / {cards.length}
-              </div>
+      <div className="flex-1 ml-64 p-8 flex flex-col justify-center">
+        <div className="max-w-3xl mx-auto w-full">
+          
+          {/* Header & Stats */}
+          <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <p className="text-[#B388EB] font-bold text-sm tracking-widest uppercase mb-1"> Flash cards</p>
+              <h1 className="text-4xl font-extrabold text-[#4A4A4A]">{deck.title}</h1>
             </div>
 
-            <div className="flex gap-4">
-              <div className="flex-1 bg-green-50 border-2 border-green-200 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white text-xl">
-                    ✓
-                  </div>
-                  <span className="text-green-700 font-medium">รู้แล้ว</span>
+            {/* ✅ กลับมาใช้ แคปซูลแสดงสถานะ แบบมินิมอลดั้งเดิม */}
+            <div className="inline-flex items-center gap-4 bg-gray-50 px-5 py-2.5 rounded-full border border-gray-100 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
+                  <span className="text-green-600 text-[10px] font-bold">✓</span>
                 </div>
-                <span className="text-2xl font-bold text-green-600">{knownCount}</span>
+                <span className="text-gray-500 text-sm font-medium">Known</span>
+                <span className="text-green-600 font-bold ml-1">{knownCount}</span>
               </div>
+              
+              <div className="w-[1px] h-4 bg-gray-300"></div> {/* เส้นคั่นตรงกลาง */}
 
-              <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                    ×
-                  </div>
-                  <span className="text-orange-700 font-medium">กำลังเรียนรู้</span>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
+                  <span className="text-orange-600 text-[10px] font-bold">✕</span>
                 </div>
-                <span className="text-2xl font-bold text-orange-600">{learningCount}</span>
+                <span className="text-gray-500 text-sm font-medium">Unknown</span>
+                <span className="text-orange-600 font-bold ml-1">{learningCount}</span>
               </div>
             </div>
           </div>
 
-          <div className="mb-8">
+          {/* Flashcard Area */}
+          <div className="relative flex flex-col items-center">
             <div
               onClick={handleFlip}
-              className={`card-container ${isFlipped ? 'flipped' : ''}`}
-              style={{ perspective: '1000px' }}
+              className={`card-container ${isFlipped ? 'flipped' : ''} w-full`}
+              style={{ perspective: '1200px' }}
             >
               <div className="card-inner">
-                <div className="card-face card-front">
-                  <div className="text-5xl font-bold text-[#7A3689] mb-8">
-                    {currentCard.term}
+                {/* Front */}
+                <div className="card-face card-front bg-[#F4ECFF] group">
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-5xl md:text-6xl font-semibold text-[#1F2937] text-center group-hover:scale-105 transition-transform duration-300">
+                      {currentCard.term}
+                    </div>
                   </div>
-                  <div className="text-sm text-[#7A3689] text-opacity-60">
-                    คลิกเพื่อดูคำตอบ
+                  <div className="w-full bg-white bg-opacity-60 py-4 text-center text-[#4B5563] text-sm font-medium">
+                    Click or press Spacebar to flip
                   </div>
                 </div>
 
-                <div className="card-face card-back">
-                  <div className="text-4xl font-medium text-[#7A3689]">
-                    {currentCard.definition}
+                {/* Back */}
+                <div className="card-face card-back bg-[#F4ECFF]">
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-4xl md:text-5xl font-semibold text-[#1F2937] text-center">
+                      {currentCard.definition}
+                    </div>
+                  </div>
+                  <div className="w-full bg-white bg-opacity-60 py-4 text-center text-[#4B5563] text-sm font-medium">
+                    Click or press Spacebar to flip
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Action Buttons */}
+            <div className="mt-8 flex justify-center w-full">
+              <div className="inline-flex items-center justify-center gap-8 bg-[#FAEEFF] px-8 py-3 rounded-full">
+                
+                {/* ปุ่ม Unknown */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleStillLearning(); }}
+                  disabled={isAnimating}
+                  className="flex items-center gap-2 transition-all duration-300 opacity-100 hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <span className="text-[#E53E3E] text-2xl font-light leading-none">✕</span>
+                  <span className="text-[#2B6CB0] font-medium text-lg">Unknown</span>
+                </button>
+
+                {/* ตัวเลขข้อ */}
+                <div className="text-[#2B6CB0] font-medium text-lg min-w-[3rem] text-center">
+                  {currentIndex + 1} / {cards.length}
+                </div>
+
+                {/* ปุ่ม Known */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleKnow(); }}
+                  disabled={isAnimating}
+                  className="flex items-center gap-2 transition-all duration-300 opacity-100 hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <span className="text-[#38A169] text-2xl font-light leading-none">✓</span>
+                  <span className="text-[#2B6CB0] font-medium text-lg">Known</span>
+                </button>
+
+              </div>
+            </div>
+
           </div>
 
-          {isFlipped && !isAnimating && (
-            <div className="grid grid-cols-2 gap-6 animate-fadeIn">
-              <button
-                onClick={handleStillLearning}
-                className="group relative overflow-hidden bg-gradient-to-br from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white rounded-3xl p-8 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-              >
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-5xl font-bold group-hover:scale-110 transition-transform">
-                    ×
-                  </div>
-                  <span className="text-xl font-bold">ยังไม่รู้</span>
-                  <span className="text-sm opacity-80">กด 1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={handleKnow}
-                className="group relative overflow-hidden bg-gradient-to-br from-green-400 to-green-500 hover:from-green-500 hover:to-green-600 text-white rounded-3xl p-8 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-              >
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-5xl group-hover:scale-110 transition-transform">
-                    ✓
-                  </div>
-                  <span className="text-xl font-bold">รู้แล้ว</span>
-                  <span className="text-sm opacity-80">กด 2</span>
-                </div>
-              </button>
-            </div>
-          )}
-
-          <div className="mt-8">
-            <div className="w-full h-2 bg-[#F0E4FF] rounded-full overflow-hidden">
+          {/* Progress Bar */}
+          <div className="mt-12">
+            <div className="w-full h-3 bg-[#F4EAFC] rounded-full overflow-hidden shadow-inner">
               <div
-                className="h-full bg-gradient-to-r from-[#7A3689] to-[#9D5CB5] transition-all duration-500"
+                className="h-full bg-gradient-to-r from-[#B388EB] to-[#7A3689] rounded-full transition-all duration-700 ease-out relative"
                 style={{ width: `${((currentIndex + 1) / cards.length) * 100}%` }}
-              />
+              >
+                <div className="absolute top-0 left-0 right-0 bottom-0 bg-white opacity-20" style={{ backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)' , backgroundSize: '1rem 1rem'}}></div>
+              </div>
             </div>
+            <p className="text-center text-[#B388EB] text-sm mt-3 font-semibold">
+              Keep it up! Progress {Math.round(((currentIndex + 1) / cards.length) * 100)}%
+            </p>
           </div>
+          
         </div>
       </div>
 
       <style jsx>{`
         .card-container {
-          width: 100%;
-          min-height: 400px;
+          height: 420px;
           cursor: pointer;
         }
         .card-inner {
           position: relative;
           width: 100%;
           height: 100%;
-          min-height: 400px;
-          transition: transform 0.6s;
+          transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); 
           transform-style: preserve-3d;
         }
         .card-container.flipped .card-inner {
@@ -462,31 +460,16 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         .card-face {
           position: absolute;
           width: 100%;
-          min-height: 400px;
+          height: 100%;
           backface-visibility: hidden;
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
-          padding: 3rem;
-          background: white;
-          border: 4px solid #e3daff;
           border-radius: 2rem;
-          transition: all 0.3s;
-        }
-        .card-face:hover {
-          border-color: #7a3689;
-          box-shadow: 0 10px 40px rgba(122, 54, 137, 0.1);
+          overflow: hidden;
         }
         .card-back {
           transform: rotateY(180deg);
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.4s ease-out;
         }
       `}</style>
     </div>
