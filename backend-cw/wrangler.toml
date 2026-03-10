@@ -9,7 +9,7 @@ database_name = "jamman-db"
 database_id   = "ed09104e-aadc-48d6-b172-c00ced803bfd"   # ได้จาก: wrangler d1 create jamman-db
 
 [vars]
-ALLOWED_ORIGIN = "https://flashcard-app-pi-eight.vercel.app/"   # เปลี่ยนเป็น URL จริงของ Vercel
+ALLOWED_ORIGIN = "https://flashcard-app-pi-eight.vercel.app"   # เปลี่ยนเป็น URL จริงของ Vercel
 
 # JWT_SECRET ไม่ใส่ที่นี่ — ใช้ wrangler secret แทน
 # wrangler secret put JWT_SECRET
