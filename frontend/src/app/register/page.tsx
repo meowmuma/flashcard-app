@@ -43,6 +43,7 @@ export default function RegisterPage() {
 
     try {
       const requestBody = {
+        name: username.trim(),
         username: username.trim(),
         email: email.trim(),
         password: password,
