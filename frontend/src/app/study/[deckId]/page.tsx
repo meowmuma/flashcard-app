@@ -340,7 +340,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
                 <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
                   <span className="text-green-600 text-[10px] font-bold">✓</span>
                 </div>
-                <span className="text-gray-500 text-sm font-medium">Known</span>
                 <span className="text-green-600 font-bold ml-1">{knownCount}</span>
               </div>
               
@@ -350,7 +349,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
                 <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
                   <span className="text-orange-600 text-[10px] font-bold">✕</span>
                 </div>
-                <span className="text-gray-500 text-sm font-medium">Unknown</span>
                 <span className="text-orange-600 font-bold ml-1">{learningCount}</span>
               </div>
             </div>

@@ -51,7 +51,6 @@ export interface PublicDeckInfo {
   category?: string | null;
   is_public: boolean;
   share_code?: string | null;
-  times_copied: number;
   card_count: number;
   author_email: string;
   is_owner?: boolean;
