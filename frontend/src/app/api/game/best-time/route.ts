@@ -8,7 +8,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     token,
     searchParams: {
       deck_id: sp.get('deck_id') || '',
-      game_type: sp.get('game_type') || 'matching',
+      game_type: sp.get('game_type') || 'match',
     },
   });
   return NextResponse.json(data, { status });

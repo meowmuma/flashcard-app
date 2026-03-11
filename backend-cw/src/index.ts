@@ -92,9 +92,9 @@ export function jsonResponse(data: unknown, status = 200, origin = '*'): Respons
 
 // ── JWT helper (Web Crypto — ไม่ต้อง install package) ──────────────────────
 
-function b64url(buf: ArrayBuffer): string {
+function b64url(buf: ArrayBufferLike): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    .replace(/\\+/g, '-').replace(/\//g, '_')
 }
 
 function decodeB64url(str: string): Uint8Array {
@@ -110,9 +110,9 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
 }
 
 export async function signJwt(payload: Record<string, unknown>, secret: string): Promise<string> {
-  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).buffer);
   const now = Math.floor(Date.now() / 1000);
-  const body = b64url(new TextEncoder().encode(JSON.stringify({ ...payload, iat: now, exp: now + 7 * 86400 })));
+  const body = b64url(new TextEncoder().encode(JSON.stringify({ ...payload, iat: now, exp: now + 7 * 86400 })).buffer);
   const key = await hmacKey(secret);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${body}`));
   return `${header}.${body}.${b64url(sig)}`;

@@ -12,7 +12,7 @@ export async function handleGame(request: Request, env: Env, path: string): Prom
   // ── GET /game/best-time ──
   if (path === '/game/best-time' && request.method === 'GET') {
     const deck_id = url.searchParams.get('deck_id');
-    const game_type = url.searchParams.get('game_type') || 'matching';
+    const game_type = url.searchParams.get('game_type') || 'match';
     if (!deck_id) return jsonResponse({ success: false, error: 'ไม่พบ deck_id' }, 400, origin);
     const row = await db.prepare(
       'SELECT best_time_seconds, last_time_seconds, attempts_count, achieved_at, last_played_at FROM game_best_times WHERE user_id = ? AND deck_id = ? AND game_type = ?'
@@ -22,7 +22,7 @@ export async function handleGame(request: Request, env: Env, path: string): Prom
 
   // ── POST /game/best-time ──
   if (path === '/game/best-time' && request.method === 'POST') {
-    const { deck_id, game_type = 'matching', time_seconds } = await request.json() as any;
+    const { deck_id, game_type = 'match', time_seconds } = await request.json() as any;
     if (!deck_id || time_seconds == null || time_seconds <= 0)
       return jsonResponse({ success: false, error: 'ข้อมูลไม่ถูกต้อง' }, 400, origin);
 

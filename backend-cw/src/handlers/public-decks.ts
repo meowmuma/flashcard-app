@@ -32,7 +32,7 @@ export async function handlePublicDecks(request: Request, env: Env, path: string
               strftime('%Y-%m-%dT%H:%M:%SZ', d.created_at) as created_at, u.email as author_email,
               CAST(COUNT(DISTINCT c.id) AS INTEGER) as card_count
        FROM decks d LEFT JOIN cards c ON d.id = c.deck_id LEFT JOIN users u ON d.user_id = u.id
-       WHERE d.share_code = ? AND d.is_public = 1 GROUP BY d.id, u.email`
+       WHERE UPPER(d.share_code) = ? AND d.is_public = 1 GROUP BY d.id, u.email`
     ).bind(shareCode).first<{ id: number } & Record<string, unknown>>();
     if (!deck) return jsonResponse({ error: 'ไม่พบชุดการ์ดนี้' }, 404, origin);
     const cards = await db.prepare('SELECT id, term, definition FROM cards WHERE deck_id = ? ORDER BY created_at ASC').bind(deck.id).all();

@@ -32,7 +32,7 @@ export async function handleAllProgress(request: Request, env: Env): Promise<Res
      INNER JOIN decks d ON sh.deck_id = d.id
      LEFT JOIN game_best_times gbt
        ON gbt.user_id = sh.user_id AND gbt.deck_id = sh.deck_id
-       AND gbt.game_type = 'matching' AND sh.session_type = 'match'
+       AND gbt.game_type = 'match' AND sh.session_type = 'match'
      WHERE sh.user_id = ?
        AND sh.id = (
          SELECT id FROM study_history sh2

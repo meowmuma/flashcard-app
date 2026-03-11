@@ -95,38 +95,23 @@ export default function PublicLibraryPage() {
       return;
     }
 
-    if (!confirm(`คุณต้องการคัดลอกชุด "${deckTitle}" ไปยังคลังของคุณหรือไม่?`)) {
-      return;
-    }
-
     try {
-      console.log(`📋 Copying deck ${deckId}...`);
-
       const response = await fetch(`/api/public-decks/${deckId}/copy`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
 
       if (response.ok) {
-        alert(`คัดลอกชุดการ์ด "${deckTitle}" สำเร็จ!\n\nคุณสามารถดูชุดนี้ได้ที่หน้า My Decks`);
-        
-        // อัปเดตจำนวนครั้งที่ถูกคัดลอก
-        setDecks(
-          decks.map((deck) =>
-            deck.id === deckId
-              ? { ...deck, times_copied: (deck.times_copied || 0) + 1 }
-              : deck
-          )
-        );
+        // ไปหน้า study ได้เลย
+        router.push(`/study/${data.deck.id}`);
+      } else if (data.existing_deck_id) {
+        // เคยคัดลอกแล้ว ไปหน้านั้นเลย
+        router.push(`/study/${data.existing_deck_id}`);
       } else {
         alert(data.error || 'ไม่สามารถคัดลอกชุดการ์ดได้');
       }
     } catch (error) {
-      console.error('❌ Error copying deck:', error);
       alert('เกิดข้อผิดพลาดในการคัดลอกชุดการ์ด');
     }
   };
@@ -277,23 +262,30 @@ export default function PublicLibraryPage() {
                       {/* ข้อมูลเพิ่มเติม */}
                       <div className="flex items-center text-sm text-gray-500 mb-4 space-x-4">
                         <span>📝 {deck.card_count} การ์ด</span>
-                        <span>📋 {deck.times_copied || 0} คัดลอก</span>
+                        {/* แสดงจำนวนคัดลอกเฉพาะถ้ามากกว่า 0 */}
+                        {(deck.times_copied || 0) > 0 && (
+                          <span>📋 {deck.times_copied} คัดลอก</span>
+                        )}
                       </div>
-
-                      {/* ผู้สร้าง */}
-                      <p className="text-xs text-gray-500 mb-4">
-                        โดย {deck.author_email}
-                      </p>
 
                       {/* ปุ่มดำเนินการ */}
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => handleCopyDeck(deck.id, deck.title)}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm"
-                        >
-                          คัดลอก
-                        </button>
-                        {deck.share_code && (
+                        {/* ซ่อนปุ่มคัดลอกถ้าเป็นชุดของเราเอง */}
+                        {!deck.is_owner && (
+                          <button
+                            onClick={() => handleCopyDeck(deck.id, deck.title)}
+                            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm"
+                          >
+                            คัดลอก
+                          </button>
+                        )}
+                        {deck.is_owner && (
+                          <span className="flex-1 px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-center text-sm">
+                            ชุดของคุณ
+                          </span>
+                        )}
+                        {/* แสดงปุ่มแชร์เฉพาะชุดของเราเอง */}
+                        {deck.share_code && deck.is_owner && (
                           <button
                             onClick={() => handleShareDeck(deck.share_code!)}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
