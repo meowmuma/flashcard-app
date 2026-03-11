@@ -185,13 +185,13 @@ export default function HomePage() {
                     key={deck.id}
                     className="bg-[#F0E4FF] rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
                   >
-                    <div>
+                    <div className="flex items-start justify-between mb-4">
                       {deck.category && (
                         <span className="px-3 py-1 bg-white rounded-full text-xs font-medium text-[#7A3689]">
                           {deck.category}
                         </span>
                       )}
-                      {deck.is_owner && (
+                      {!!deck.is_owner && (
                         <span className="px-3 py-1 bg-[#7A3689] text-white rounded-full text-xs font-medium">
                           ของฉัน
                         </span>
