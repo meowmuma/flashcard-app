@@ -13,7 +13,6 @@ interface DeckInfo {
   category?: string | null;
   is_public: boolean;
   share_code?: string | null;
-  times_copied: number;
   card_count: number;
   author_email: string;
   is_owner?: boolean;
@@ -110,7 +109,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-white flex">
       <Sidebar />
       
-      <div className="flex-1 ml-64">
+      <div className="flex-1 lg:ml-64 pt-16 lg:pt-0">
         <div className="max-w-7xl mx-auto p-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-[#7A3689] mb-2">
