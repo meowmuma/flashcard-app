@@ -14,6 +14,7 @@ interface DeckInfo {
   is_public: boolean;
   share_code?: string | null;
   card_count: number;
+  author_name?: string;
   author_email: string;
   is_owner?: boolean;
 }
@@ -210,7 +211,7 @@ export default function HomePage() {
 
                     <div className="flex items-center text-sm text-[#7A3689] text-opacity-60 mb-4 space-x-4">
                       <span>📝 {deck.card_count} cards</span>
-                      <span>👤 {deck.author_email.split('@')[0]}</span>
+                      <span>👤 {deck.author_name || deck.author_email.split('@')[0]}</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">

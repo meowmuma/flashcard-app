@@ -290,7 +290,7 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
         <div className="flex-1 ml-64 flex items-center justify-center">
           <div className="text-center animate-pulse">
             <div className="inline-block rounded-full h-16 w-16 border-4 border-[#F0E4FF] border-t-[#B388EB] animate-spin mb-4"></div>
-            <p className="text-[#B388EB] font-bold text-lg tracking-wide">กำลังโหลดการ์ด...</p>
+            <p className="text-[#B388EB] font-bold text-lg tracking-wide">Preparing cards.... 💖</p>
           </div>
         </div>
       </div>
@@ -338,9 +338,9 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
             <div className="inline-flex items-center gap-4 bg-gray-50 px-5 py-2.5 rounded-full border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                  <span className="text-gray-500 text-sm font-medium">Known</span>
                   <span className="text-green-600 text-[10px] font-bold">✓</span>
                 </div>
+                <span className="text-gray-500 text-sm font-medium">Known</span>
                 <span className="text-green-600 font-bold ml-1">{knownCount}</span>
               </div>
               
@@ -348,9 +348,9 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
 
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
-                  <span className="text-gray-500 text-sm font-medium">Unknown</span>
                   <span className="text-orange-600 text-[10px] font-bold">✕</span>
                 </div>
+                <span className="text-gray-500 text-sm font-medium">Unknown</span>
                 <span className="text-orange-600 font-bold ml-1">{learningCount}</span>
               </div>
             </div>

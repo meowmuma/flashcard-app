@@ -14,7 +14,7 @@ export async function handlePublicDecks(request: Request, env: Env, path: string
     const rows = await db.prepare(
       `SELECT d.id, d.title, d.description, d.category, d.is_public, d.share_code,
               d.times_copied, strftime('%Y-%m-%dT%H:%M:%SZ', d.created_at) as created_at,
-              u.email as author_email, CAST(COUNT(c.id) AS INTEGER) as card_count,
+              u.email as author_email, u.name as author_name, CAST(COUNT(c.id) AS INTEGER) as card_count,
               CASE WHEN d.user_id = ? THEN 1 ELSE 0 END as is_owner
        FROM decks d INNER JOIN users u ON d.user_id = u.id
        LEFT JOIN cards c ON d.id = c.deck_id
