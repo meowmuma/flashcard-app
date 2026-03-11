@@ -338,6 +338,7 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
             <div className="inline-flex items-center gap-4 bg-gray-50 px-5 py-2.5 rounded-full border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
+                  <span className="text-green-600 text-sm font-medium">Known</span>
                   <span className="text-green-600 text-[10px] font-bold">✓</span>
                 </div>
                 <span className="text-green-600 font-bold ml-1">{knownCount}</span>
@@ -347,6 +348,7 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
 
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center">
+                  <span className="text-orange-600 text-sm font-medium">Unknown</span>
                   <span className="text-orange-600 text-[10px] font-bold">✕</span>
                 </div>
                 <span className="text-orange-600 font-bold ml-1">{learningCount}</span>
@@ -399,7 +401,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
                   className="flex items-center gap-2 transition-all duration-300 opacity-100 hover:scale-105 active:scale-95 cursor-pointer"
                 >
                   <span className="text-[#E53E3E] text-2xl font-light leading-none">✕</span>
-                  <span className="text-[#2B6CB0] font-medium text-lg">Unknown</span>
                 </button>
 
                 {/* ตัวเลขข้อ */}
@@ -414,7 +415,6 @@ export default function StudyPage({ params }: { params: { deckId: string } }) {
                   className="flex items-center gap-2 transition-all duration-300 opacity-100 hover:scale-105 active:scale-95 cursor-pointer"
                 >
                   <span className="text-[#38A169] text-2xl font-light leading-none">✓</span>
-                  <span className="text-[#2B6CB0] font-medium text-lg">Known</span>
                 </button>
 
               </div>

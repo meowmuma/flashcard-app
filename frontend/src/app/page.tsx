@@ -185,7 +185,7 @@ export default function HomePage() {
                     key={deck.id}
                     className="bg-[#F0E4FF] rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
                   >
-                    <div className="flex items-start mb-4">
+                    <div>
                       {deck.category && (
                         <span className="px-3 py-1 bg-white rounded-full text-xs font-medium text-[#7A3689]">
                           {deck.category}
