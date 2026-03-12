@@ -188,14 +188,14 @@ export default function MyLibraryPage() {
                   className="bg-[#F0E4FF] rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
                 >
                   <div className="flex items-start justify-between mb-4">
-                    {deck.category && (
+                    {deck.category ? (
                       <span className="px-3 py-1 bg-white rounded-full text-xs font-medium text-[#7A3689]">
                         {deck.category}
                       </span>
-                    )}
+                    ) : <span />}
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        deck.is_public
+                        !!deck.is_public
                           ? 'bg-[#7A3689] text-white'
                           : 'bg-white text-[#7A3689]'
                       }`}
