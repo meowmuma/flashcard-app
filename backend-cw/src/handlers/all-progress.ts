@@ -15,30 +15,47 @@ export async function handleAllProgress(request: Request, env: Env): Promise<Res
             NULL AS completed_at, NULL AS best_time_seconds,
             strftime('%Y-%m-%dT%H:%M:%SZ', sp.updated_at) AS updated_at,
             'progress' AS data_type
-     FROM study_progress sp INNER JOIN decks d ON sp.deck_id = d.id
-     WHERE sp.user_id = ? ORDER BY sp.updated_at DESC`
+     FROM study_progress sp
+     INNER JOIN decks d ON sp.deck_id = d.id
+     WHERE sp.user_id = ?
+     ORDER BY sp.updated_at DESC`
   ).bind(userId).all();
 
   const historyRows = await db.prepare(
     `SELECT sh.id, sh.deck_id, d.title AS deck_title, sh.session_type,
             sh.total_cards, sh.known_cards, sh.unknown_cards,
             NULL AS current_card_index, sh.accuracy_percentage,
-            CASE WHEN sh.session_type = 'match' THEN gbt.last_time_seconds
-                 ELSE sh.time_spent_seconds END AS time_spent_seconds,
+
+            CASE 
+              WHEN sh.session_type = 'match' THEN gbt.last_time_seconds
+              ELSE sh.time_spent_seconds
+            END AS time_spent_seconds,
+
             strftime('%Y-%m-%dT%H:%M:%SZ', sh.completed_at) AS completed_at,
             strftime('%Y-%m-%dT%H:%M:%SZ', sh.completed_at) AS updated_at,
-            gbt.best_time_seconds, 'history' AS data_type
+
+            gbt.best_time_seconds,
+            'history' AS data_type
+
      FROM study_history sh
      INNER JOIN decks d ON sh.deck_id = d.id
+
      LEFT JOIN game_best_times gbt
-       ON gbt.user_id = sh.user_id AND gbt.deck_id = sh.deck_id
-       AND gbt.game_type = 'match' AND sh.session_type = 'match'
+       ON gbt.user_id = sh.user_id
+       AND gbt.deck_id = sh.deck_id
+       AND gbt.game_type = 'match'
+
      WHERE sh.user_id = ?
        AND sh.id = (
-         SELECT id FROM study_history sh2
-         WHERE sh2.user_id = sh.user_id AND sh2.deck_id = sh.deck_id AND sh2.session_type = sh.session_type
-         ORDER BY sh2.completed_at DESC LIMIT 1
+         SELECT id
+         FROM study_history sh2
+         WHERE sh2.user_id = sh.user_id
+           AND sh2.deck_id = sh.deck_id
+           AND sh2.session_type = sh.session_type
+         ORDER BY sh2.completed_at DESC
+         LIMIT 1
        )
+
      ORDER BY sh.completed_at DESC`
   ).bind(userId).all();
 

@@ -200,7 +200,7 @@ export default function MyLibraryPage() {
                           : 'bg-white text-[#7A3689]'
                       }`}
                     >
-                      {deck.is_public ? 'Public' : 'Private'}
+                      {!!deck.is_public ? 'Public' : 'Private'}
                     </span>
                   </div>
 

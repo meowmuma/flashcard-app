@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS game_best_times (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   deck_id           INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
-  game_type         TEXT NOT NULL DEFAULT 'matching',
+  game_type         TEXT NOT NULL DEFAULT 'match',
   best_time_seconds REAL,
   last_time_seconds REAL,
   attempts_count    INTEGER NOT NULL DEFAULT 1,

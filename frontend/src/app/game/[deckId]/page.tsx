@@ -86,7 +86,7 @@ export default function MatchingGamePage() {
       cardsRef.current = deckData.cards;
       setTimeout(() => startGame(deckData.cards), 100);
 
-      const bestRes = await fetch(`/api/game/best-time?deck_id=${deckId}&game_type=matching`, {
+      const bestRes = await fetch(`/api/game/best-time?deck_id=${deckId}&game_type=match`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (bestRes.ok) {
@@ -227,7 +227,7 @@ export default function MatchingGamePage() {
       },
       body: JSON.stringify({
         deck_id: deckId,
-        game_type: 'matching',
+        game_type: 'match',
         time_seconds: elapsedSec
       })
     });
