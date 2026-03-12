@@ -247,7 +247,7 @@ export default function MyLibraryPage() {
                   </div>
 
                   {/* ปุ่มแชร์ (ถ้ามี) */}
-                  {deck.is_public && deck.share_code && (
+                  {!!deck.is_public && deck.share_code && (
                     <button
                       onClick={() => handleShare(deck.share_code!, deck.title)}
                       className="w-full px-4 py-3 bg-white text-[#7A3689] rounded-full hover:bg-[#E3DAFF] transition-all font-medium text-sm border border-[#E3DAFF]"
